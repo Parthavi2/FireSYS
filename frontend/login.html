@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+</head>
+<body>
+  <button class="theme-toggle auth-mode-toggle" data-theme-toggle aria-label="Toggle dark mode">
+    <i data-lucide="sun" class="icon icon-sun"></i>
+    <i data-lucide="moon" class="icon icon-moon"></i>
+  </button>
+
+  <div class="auth-shell">
+    <aside class="auth-showcase">
+      <a href="welcome.html" class="auth-brand">
+        <div class="auth-brand-mark"><i data-lucide="flame" class="icon"></i></div>
+        <div>
+          <div class="auth-brand-name">FireSYS</div>
+          <div class="auth-brand-tag">Command Console</div>
+        </div>
+      </a>
+
+      <div class="auth-headline">
+        <h1>Welcome back to the command console.</h1>
+        <p>Sign in to track live incidents, coordinate dispatch, and keep every crew and truck accounted for.</p>
+      </div>
+
+      <div class="auth-stats">
+        <div><div class="auth-stat-value">99.9%</div><div class="auth-stat-label">Uptime</div></div>
+        <div><div class="auth-stat-value">&lt;2min</div><div class="auth-stat-label">Avg. dispatch time</div></div>
+        <div><div class="auth-stat-value">24/7</div><div class="auth-stat-label">Coverage</div></div>
+      </div>
+    </aside>
+
+    <main class="auth-form-panel">
+      <div class="auth-card card-glass animate-in">
+        <div class="auth-card-header">
+          <h2>Sign in</h2>
+          <p>Enter your credentials to access your dashboard.</p>
+        </div>
+
+        <div id="loginBanner" class="banner banner-danger hidden">
+          <i data-lucide="alert-circle" class="icon"></i>
+          <span id="loginBannerText"></span>
+        </div>
+
+        <form id="loginForm" novalidate>
+          <div class="field" id="emailField">
+            <input type="email" id="email" placeholder=" " autocomplete="email" required>
+            <label for="email">Email address</label>
+            <div class="field-error"><i data-lucide="alert-circle" class="icon" style="width:14px;height:14px;"></i><span></span></div>
+          </div>
+
+          <div class="field" id="passwordField">
+            <input type="password" id="password" placeholder=" " autocomplete="current-password" required>
+            <label for="password">Password</label>
+            <button type="button" class="field-icon-toggle" id="togglePassword">
+              <i data-lucide="eye" class="icon"></i>
+            </button>
+            <div class="field-error"><i data-lucide="alert-circle" class="icon" style="width:14px;height:14px;"></i><span></span></div>
+          </div>
+
+          <div class="form-row-between">
+            <label class="checkbox-row"><input type="checkbox" id="remember"> Remember me</label>
+            <a href="forgot-password.html" class="link">Forgot password?</a>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
+            Sign in <i data-lucide="arrow-right" class="icon"></i>
+          </button>
+        </form>
+
+        <div class="divider">New to FireSYS</div>
+        <a href="register.html" class="btn btn-secondary btn-block">Create a firefighter account</a>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const emailField = document.getElementById('emailField');
+      const passwordField = document.getElementById('passwordField');
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const banner = document.getElementById('loginBanner');
+      const btn = document.getElementById('loginBtn');
+
+      clearFieldError(emailField);
+      clearFieldError(passwordField);
+      banner.classList.add('hidden');
+
+      let hasError = false;
+      if (!email) { setFieldError(emailField, 'Email is required'); hasError = true; }
+      if (!password) { setFieldError(passwordField, 'Password is required'); hasError = true; }
+      if (hasError) return;
+
+      setButtonLoading(btn, true, 'Signing in…');
+      try {
+        const user = await login(email, password);
+        showToast(`Welcome back, ${user.name.split(' ')[0]}.`, 'success');
+        setTimeout(() => { window.location.href = dashboardPathForRole(user.role); }, 500);
+      } catch (err) {
+        banner.classList.remove('hidden');
+        document.getElementById('loginBannerText').textContent = err.message;
+        setButtonLoading(btn, false);
+      }
+    });
+
+    wirePasswordToggle(document.getElementById('togglePassword'), document.getElementById('password'));
+  </script>
+</body>
+</html>

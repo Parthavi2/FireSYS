@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Profile — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+</head>
+<body>
+  <script src="js/auth.js"></script>
+  <script src="js/app-shell.js"></script>
+  <script>
+    const session = requireAuth('Firefighter');
+    let me = null;
+
+    const STATUSES = ['Available', 'Busy', 'Standby', 'Off Duty'];
+    const STATUS_BADGE = { Available: 'badge-success', Busy: 'badge-danger', Standby: 'badge-warning', 'Off Duty': 'badge-neutral' };
+
+    if (session) {
+      renderShell({
+        session,
+        activeHref: 'firefighter-profile.html',
+        pageTitle: 'My profile',
+        pageSubtitle: 'Your account, station assignment, and duty status.',
+      });
+
+      document.getElementById('pageBody').innerHTML = `
+        <div class="content-grid">
+          <div class="card panel">
+            <div class="panel-header"><h3>Profile</h3></div>
+            <div id="profilePanel">
+              <div class="skeleton skeleton-text" style="height:40px; margin-bottom:10px;"></div>
+              <div class="skeleton skeleton-text" style="height:40px;"></div>
+            </div>
+          </div>
+          <div class="card panel">
+            <div class="panel-header"><h3>Update details</h3></div>
+            <div id="editPanel">
+              <div class="skeleton skeleton-text" style="height:52px; margin-bottom:16px;"></div>
+              <div class="skeleton skeleton-text" style="height:52px;"></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      if (window.lucide) window.lucide.createIcons();
+      loadProfile();
+    }
+
+    async function loadProfile() {
+      try {
+        const firefighters = await apiAuth('/firefighters');
+        me = firefighters.find((f) => f.user_id === session.user.id) || null;
+        renderProfile();
+        renderEditForm();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function renderProfile() {
+      const panel = document.getElementById('profilePanel');
+      if (!me) {
+        panel.innerHTML = `<div class="empty-state"><div class="icon-wrap"><i data-lucide="user-x" class="icon"></i></div><h4>No profile found</h4><p>Contact your admin to link your account.</p></div>`;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+      panel.innerHTML = `
+        <div style="display:flex; align-items:center; gap:14px; margin-bottom:20px;">
+          <div class="cell-avatar" style="width:52px; height:52px; font-size:17px;">${initials(session.user.name)}</div>
+          <div>
+            <div style="font-weight:700; font-size:16px;">${session.user.name}</div>
+            <div style="font-size:12.5px; color:var(--text-muted);">${session.user.email}</div>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:14px; font-size:13.5px;">
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Rank</span><strong>${me.rank_title || '—'}</strong></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Station</span><strong>${me.station_name || 'Unassigned'}</strong></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-secondary);">Phone</span><strong>${me.phone || '—'}</strong></div>
+          <div style="display:flex; justify-content:space-between; align-items:center;"><span style="color:var(--text-secondary);">Status</span><span class="badge ${STATUS_BADGE[me.status] || 'badge-neutral'}">${me.status}</span></div>
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function renderEditForm() {
+      const panel = document.getElementById('editPanel');
+      if (!me) { panel.innerHTML = ''; return; }
+      panel.innerHTML = `
+        <div id="formBanner" class="banner banner-success hidden"><i data-lucide="check-circle-2" class="icon"></i><span>Profile updated.</span></div>
+        <form id="profileForm" novalidate>
+          <div class="field"><input type="tel" id="mPhone" placeholder=" " value="${me.phone || ''}"><label>Phone number</label></div>
+          <div class="field">
+            <select id="mStatus" style="width:100%; height:52px; padding:0 16px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg-surface); color:var(--text-primary);">
+              ${STATUSES.map((s) => `<option value="${s}" ${me.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+          </div>
+        </form>
+        <button class="btn btn-primary btn-block" id="saveBtn"><i data-lucide="save" class="icon"></i> Save changes</button>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+
+      document.getElementById('saveBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('saveBtn');
+        const banner = document.getElementById('formBanner');
+        banner.className = 'banner hidden';
+        try {
+          setButtonLoading(btn, true, 'Saving…');
+          await apiAuth(`/firefighters/${me.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              phone: document.getElementById('mPhone').value.trim() || null,
+              status: document.getElementById('mStatus').value,
+            }),
+          });
+          showToast('Profile updated.', 'success');
+          banner.className = 'banner banner-success';
+          banner.querySelector('span').textContent = 'Profile updated.';
+          setButtonLoading(btn, false);
+          loadProfile();
+        } catch (err) {
+          banner.className = 'banner banner-danger';
+          banner.innerHTML = `<i data-lucide="alert-circle" class="icon"></i><span>${err.message}</span>`;
+          if (window.lucide) window.lucide.createIcons();
+          setButtonLoading(btn, false);
+        }
+      });
+    }
+  </script>
+</body>
+</html>

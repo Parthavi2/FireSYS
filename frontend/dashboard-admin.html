@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Overview — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <script src="js/auth.js"></script>
+  <script src="js/app-shell.js"></script>
+  <script>
+    const session = requireAuth('Admin');
+  </script>
+
+  <script>
+    if (session) {
+      renderShell({
+        session,
+        activeHref: 'dashboard-admin.html',
+        pageTitle: 'Overview',
+        pageSubtitle: `Welcome back, ${session.user.name.split(' ')[0]}. Here's what's happening across your stations.`,
+      });
+
+      document.getElementById('pageBody').innerHTML = `
+        <div class="kpi-grid" id="kpiGrid"></div>
+
+        <div class="content-grid">
+          <div class="card panel">
+            <div class="panel-header">
+              <h3>Incidents — last 6 months</h3>
+            </div>
+            <canvas id="incidentChart" height="120"></canvas>
+          </div>
+
+          <div class="card panel">
+            <div class="panel-header">
+              <h3>Quick actions</h3>
+            </div>
+            <div class="quick-actions">
+              <a href="admin-users.html" class="quick-action-btn">
+                <div class="icon-wrap"><i data-lucide="user-plus" class="icon"></i></div>
+                Add user
+              </a>
+              <a href="admin-trucks.html" class="quick-action-btn">
+                <div class="icon-wrap"><i data-lucide="truck" class="icon"></i></div>
+                Add truck
+              </a>
+              <a href="admin-stations.html" class="quick-action-btn">
+                <div class="icon-wrap"><i data-lucide="building-2" class="icon"></i></div>
+                Add station
+              </a>
+              <a href="admin-maintenance.html" class="quick-action-btn">
+                <div class="icon-wrap"><i data-lucide="wrench" class="icon"></i></div>
+                Schedule maintenance
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="content-grid">
+          <div class="card panel">
+            <div class="panel-header">
+              <h3>Recent activity</h3>
+            </div>
+            <div id="activityFeed">
+              <div class="skeleton skeleton-text" style="height:40px; margin-bottom:10px;"></div>
+              <div class="skeleton skeleton-text" style="height:40px; margin-bottom:10px;"></div>
+              <div class="skeleton skeleton-text" style="height:40px;"></div>
+            </div>
+          </div>
+
+          <div class="card panel">
+            <div class="panel-header">
+              <h3>Fleet &amp; crew readiness</h3>
+            </div>
+            <div id="readinessPanel">
+              <div class="skeleton skeleton-text" style="height:16px;"></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      if (window.lucide) window.lucide.createIcons();
+      loadDashboard();
+    }
+
+    const ACTIVITY_ICONS = {
+      user: 'user', station: 'building-2', truck: 'truck', firefighter: 'flame',
+      maintenance: 'wrench', incident: 'siren',
+    };
+
+    async function loadDashboard() {
+      try {
+        const [summary, monthly, activity] = await Promise.all([
+          apiAuth('/analytics/summary'),
+          apiAuth('/analytics/monthly-incidents'),
+          apiAuth('/analytics/activity?limit=8'),
+        ]);
+        renderKpis(summary);
+        renderChart(monthly);
+        renderActivity(activity);
+        renderReadiness(summary);
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function renderKpis(summary) {
+      const cards = [
+        { label: 'Total incidents', value: summary.incidents.total, icon: 'siren', bg: 'var(--color-danger-bg)', fg: 'var(--color-primary)' },
+        { label: 'Active incidents', value: summary.incidents.active, icon: 'activity', bg: 'var(--color-warning-bg)', fg: 'var(--color-warning)' },
+        { label: 'Firefighters available', value: `${summary.firefighters.available}/${summary.firefighters.total}`, icon: 'flame', bg: 'var(--color-accent-light)', fg: 'var(--color-accent)' },
+        { label: 'Trucks available', value: `${summary.trucks.available}/${summary.trucks.total}`, icon: 'truck', bg: 'var(--color-success-bg)', fg: 'var(--color-success)' },
+      ];
+      document.getElementById('kpiGrid').innerHTML = cards.map((c) => `
+        <div class="card kpi-card">
+          <div class="kpi-card-top">
+            <div class="kpi-icon" style="background:${c.bg}; color:${c.fg};"><i data-lucide="${c.icon}" class="icon"></i></div>
+          </div>
+          <div class="kpi-value">${c.value}</div>
+          <div class="kpi-label">${c.label}</div>
+        </div>
+      `).join('');
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function renderChart(monthly) {
+      const labels = monthly.map((m) => {
+        const [y, mo] = m.month.split('-');
+        return new Date(Number(y), Number(mo) - 1).toLocaleString('default', { month: 'short' });
+      });
+      const data = monthly.map((m) => m.count);
+
+      const ctx = document.getElementById('incidentChart');
+      const isDark = document.body.classList.contains('dark');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels.length ? labels : ['No data yet'],
+          datasets: [{
+            data: data.length ? data : [0],
+            backgroundColor: '#b3261e',
+            borderRadius: 6,
+            maxBarThickness: 36,
+          }],
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: isDark ? '#aab3c5' : '#565d6d' } },
+            y: { beginAtZero: true, ticks: { precision: 0, color: isDark ? '#aab3c5' : '#565d6d' }, grid: { color: isDark ? '#223151' : '#e6e8ee' } },
+          },
+        },
+      });
+    }
+
+    function renderActivity(activity) {
+      const feed = document.getElementById('activityFeed');
+      if (!activity.length) {
+        feed.innerHTML = `<div class="empty-state"><div class="icon-wrap"><i data-lucide="inbox" class="icon"></i></div><h4>No activity yet</h4><p>Actions across the platform will show up here.</p></div>`;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+      feed.innerHTML = activity.map((a) => `
+        <div class="activity-item">
+          <div class="activity-dot"><i data-lucide="${ACTIVITY_ICONS[a.entity_type] || 'activity'}" class="icon" style="width:15px;height:15px;"></i></div>
+          <div>
+            <div class="activity-text"><strong>${a.user_name || 'System'}</strong> ${a.action.toLowerCase()}${a.details ? ` — ${a.details}` : ''}</div>
+            <div class="activity-time">${timeAgo(a.created_at)}</div>
+          </div>
+        </div>
+      `).join('');
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function renderReadiness(summary) {
+      const fRate = summary.firefighters.total ? Math.round((summary.firefighters.available / summary.firefighters.total) * 100) : 0;
+      const tRate = summary.trucks.total ? Math.round((summary.trucks.available / summary.trucks.total) * 100) : 0;
+      document.getElementById('readinessPanel').innerHTML = `
+        <div style="margin-bottom:18px;">
+          <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;">
+            <span>Firefighters available</span><strong>${fRate}%</strong>
+          </div>
+          <div style="height:8px; border-radius:99px; background:var(--border-subtle); overflow:hidden;">
+            <div style="height:100%; width:${fRate}%; background:var(--color-accent); border-radius:99px;"></div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px;">
+            <span>Trucks available</span><strong>${tRate}%</strong>
+          </div>
+          <div style="height:8px; border-radius:99px; background:var(--border-subtle); overflow:hidden;">
+            <div style="height:100%; width:${tRate}%; background:var(--color-success); border-radius:99px;"></div>
+          </div>
+        </div>
+        <div style="margin-top:18px; display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-muted);">
+          <i data-lucide="building-2" class="icon" style="width:14px;height:14px;"></i> ${summary.stations} stations reporting
+        </div>
+      `;
+      if (window.lucide) window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

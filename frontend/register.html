@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create account — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+<style>
+  .password-strength { display: flex; gap: 4px; margin: -12px 0 20px; }
+  .password-strength span { flex: 1; height: 4px; border-radius: 2px; background: var(--border-subtle); transition: background var(--transition); }
+</style>
+</head>
+<body>
+  <button class="theme-toggle auth-mode-toggle" data-theme-toggle aria-label="Toggle dark mode">
+    <i data-lucide="sun" class="icon icon-sun"></i>
+    <i data-lucide="moon" class="icon icon-moon"></i>
+  </button>
+
+  <div class="auth-shell">
+    <aside class="auth-showcase">
+      <a href="welcome.html" class="auth-brand">
+        <div class="auth-brand-mark"><i data-lucide="flame" class="icon"></i></div>
+        <div>
+          <div class="auth-brand-name">FireSYS</div>
+          <div class="auth-brand-tag">Command Console</div>
+        </div>
+      </a>
+
+      <div class="auth-headline">
+        <h1>Join your station's roster.</h1>
+        <p>Firefighter accounts get a live view of assigned incidents, status updates, and personal duty history. Admin and Dispatcher accounts are provisioned by your station administrator.</p>
+      </div>
+
+      <div class="auth-stats">
+        <div><div class="auth-stat-value">142</div><div class="auth-stat-label">Firefighters onboard</div></div>
+        <div><div class="auth-stat-value">2</div><div class="auth-stat-label">Stations live</div></div>
+      </div>
+    </aside>
+
+    <main class="auth-form-panel">
+      <div class="auth-card card-glass animate-in">
+        <div class="auth-card-header">
+          <h2>Create your account</h2>
+          <p>Register as a firefighter to get started.</p>
+        </div>
+
+        <div id="registerBanner" class="banner banner-danger hidden">
+          <i data-lucide="alert-circle" class="icon"></i>
+          <span id="registerBannerText"></span>
+        </div>
+
+        <form id="registerForm" novalidate>
+          <div class="field" id="nameField">
+            <input type="text" id="name" placeholder=" " autocomplete="name" required>
+            <label for="name">Full name</label>
+            <div class="field-error"><i data-lucide="alert-circle" class="icon" style="width:14px;height:14px;"></i><span></span></div>
+          </div>
+
+          <div class="field" id="emailField">
+            <input type="email" id="email" placeholder=" " autocomplete="email" required>
+            <label for="email">Email address</label>
+            <div class="field-error"><i data-lucide="alert-circle" class="icon" style="width:14px;height:14px;"></i><span></span></div>
+          </div>
+
+          <div class="field" id="passwordField">
+            <input type="password" id="password" placeholder=" " autocomplete="new-password" required>
+            <label for="password">Password</label>
+            <button type="button" class="field-icon-toggle" id="togglePassword">
+              <i data-lucide="eye" class="icon"></i>
+            </button>
+            <div class="field-error"><i data-lucide="alert-circle" class="icon" style="width:14px;height:14px;"></i><span></span></div>
+          </div>
+          <div class="password-strength" id="strengthBar">
+            <span></span><span></span><span></span><span></span>
+          </div>
+
+          <div class="field" id="confirmField">
+            <input type="password" id="confirmPassword" placeholder=" " autocomplete="new-password" required>
+            <label for="confirmPassword">Confirm password</label>
+            <div class="field-error"><i data-lucide="alert-circle" class="icon" style="width:14px;height:14px;"></i><span></span></div>
+          </div>
+
+          <div class="form-row-between" style="justify-content: flex-start;">
+            <label class="checkbox-row">
+              <input type="checkbox" id="terms" required>
+              I agree to the operating procedures &amp; data policy
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" id="registerBtn">
+            Create account <i data-lucide="arrow-right" class="icon"></i>
+          </button>
+        </form>
+
+        <div class="divider">Already registered</div>
+        <a href="login.html" class="btn btn-secondary btn-block">Sign in instead</a>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/auth.js"></script>
+  <script>
+    const pwInput = document.getElementById('password');
+    const bars = document.querySelectorAll('#strengthBar span');
+    const strengthColors = ['var(--color-danger)', 'var(--color-warning)', '#eab308', 'var(--color-success)'];
+
+    pwInput.addEventListener('input', () => {
+      const v = pwInput.value;
+      let score = 0;
+      if (v.length >= 8) score++;
+      if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score++;
+      if (/\d/.test(v)) score++;
+      if (/[^A-Za-z0-9]/.test(v)) score++;
+      bars.forEach((bar, i) => {
+        bar.style.background = i < score ? strengthColors[Math.min(score, 4) - 1] : 'var(--border-subtle)';
+      });
+    });
+
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const fields = {
+        name: document.getElementById('nameField'),
+        email: document.getElementById('emailField'),
+        password: document.getElementById('passwordField'),
+        confirm: document.getElementById('confirmField'),
+      };
+      Object.values(fields).forEach(clearFieldError);
+      const banner = document.getElementById('registerBanner');
+      banner.classList.add('hidden');
+
+      const name = document.getElementById('name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirmPassword').value;
+      const terms = document.getElementById('terms').checked;
+
+      let hasError = false;
+      if (!name) { setFieldError(fields.name, 'Full name is required'); hasError = true; }
+      if (!email) { setFieldError(fields.email, 'Email is required'); hasError = true; }
+      if (password.length < 8) { setFieldError(fields.password, 'Use at least 8 characters'); hasError = true; }
+      if (confirm !== password) { setFieldError(fields.confirm, 'Passwords do not match'); hasError = true; }
+      if (!terms) { showToast('Please accept the data policy to continue.', 'info'); hasError = true; }
+      if (hasError) return;
+
+      const btn = document.getElementById('registerBtn');
+      setButtonLoading(btn, true, 'Creating account…');
+      try {
+        const user = await registerFirefighter({ name, email, password });
+        showToast('Account created. Welcome to FireSYS.', 'success');
+        setTimeout(() => { window.location.href = dashboardPathForRole(user.role); }, 500);
+      } catch (err) {
+        banner.classList.remove('hidden');
+        document.getElementById('registerBannerText').textContent = err.message;
+        setButtonLoading(btn, false);
+      }
+    });
+
+    wirePasswordToggle(document.getElementById('togglePassword'), document.getElementById('password'));
+  </script>
+</body>
+</html>

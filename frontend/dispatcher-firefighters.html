@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Firefighters — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+</head>
+<body>
+  <script src="js/auth.js"></script>
+  <script src="js/app-shell.js"></script>
+  <script>
+    const session = requireAuth('Dispatcher');
+    let allFirefighters = [];
+    let currentPage = 1;
+    const PAGE_SIZE = 8;
+    let statusFilter = 'All';
+    let searchTerm = '';
+
+    const STATUSES = ['Available', 'Busy', 'Standby', 'Off Duty'];
+    const STATUS_BADGE = { Available: 'badge-success', Busy: 'badge-danger', Standby: 'badge-warning', 'Off Duty': 'badge-neutral' };
+
+    if (session) {
+      renderShell({
+        session,
+        activeHref: 'dispatcher-firefighters.html',
+        pageTitle: 'Firefighters',
+        pageSubtitle: 'Crew availability across all stations.',
+      });
+
+      document.getElementById('pageBody').innerHTML = `
+        <div class="card panel">
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <div class="search-bar" style="width:240px;">
+                <i data-lucide="search" class="icon" style="width:15px;height:15px;"></i>
+                <input type="text" id="searchInput" placeholder="Search name…">
+              </div>
+              <select class="filter-select" id="statusFilterEl">
+                <option value="All">All statuses</option>
+                ${STATUSES.map((s) => `<option>${s}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Firefighter</th><th>Rank</th><th>Station</th><th>Status</th><th></th></tr></thead>
+              <tbody id="ffTbody">${skeletonRows(5, 5)}</tbody>
+            </table>
+          </div>
+          <div class="table-pagination">
+            <span id="paginationInfo"></span>
+            <div class="pagination-btns" id="paginationBtns"></div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('searchInput').addEventListener('input', (e) => { searchTerm = e.target.value.toLowerCase(); currentPage = 1; renderTable(); });
+      document.getElementById('statusFilterEl').addEventListener('change', (e) => { statusFilter = e.target.value; currentPage = 1; renderTable(); });
+
+      if (window.lucide) window.lucide.createIcons();
+      loadFirefighters();
+    }
+
+    async function loadFirefighters() {
+      try {
+        allFirefighters = await apiAuth('/firefighters');
+        renderTable();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function filtered() {
+      return allFirefighters.filter((f) => {
+        const matchesStatus = statusFilter === 'All' || f.status === statusFilter;
+        const matchesSearch = !searchTerm || f.name.toLowerCase().includes(searchTerm);
+        return matchesStatus && matchesSearch;
+      });
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('ffTbody');
+      const rows = filtered();
+      const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+      currentPage = Math.min(currentPage, totalPages);
+      const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+      if (!pageRows.length) {
+        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon-wrap"><i data-lucide="flame" class="icon"></i></div><h4>No firefighters found</h4><p>Try a different search or filter.</p></div></td></tr>`;
+      } else {
+        tbody.innerHTML = pageRows.map((f) => `
+          <tr>
+            <td>
+              <div class="cell-user">
+                <div class="cell-avatar">${initials(f.name)}</div>
+                <div style="font-weight:600;">${f.name}</div>
+              </div>
+            </td>
+            <td>${f.rank_title || '—'}</td>
+            <td>${f.station_name || '—'}</td>
+            <td><span class="badge ${STATUS_BADGE[f.status] || 'badge-neutral'}">${f.status}</span></td>
+            <td>
+              <div class="row-actions">
+                ${f.status !== 'Available' ? `<button class="btn-icon" title="Mark available" onclick="setStatus(${f.id}, 'Available')"><i data-lucide="check" class="icon" style="width:15px;height:15px;"></i></button>` : ''}
+                ${f.status === 'Available' ? `<button class="btn-icon" title="Mark busy" onclick="setStatus(${f.id}, 'Busy')"><i data-lucide="pause" class="icon" style="width:15px;height:15px;"></i></button>` : ''}
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      document.getElementById('paginationInfo').textContent = rows.length
+        ? `Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, rows.length)} of ${rows.length}`
+        : 'No results';
+
+      const btns = document.getElementById('paginationBtns');
+      let html = `<button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})"><i data-lucide="chevron-left" class="icon" style="width:14px;height:14px;"></i></button>`;
+      for (let p = 1; p <= totalPages; p++) html += `<button class="${p === currentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
+      html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})"><i data-lucide="chevron-right" class="icon" style="width:14px;height:14px;"></i></button>`;
+      btns.innerHTML = html;
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function goToPage(p) { currentPage = p; renderTable(); }
+
+    async function setStatus(id, status) {
+      try {
+        await apiAuth(`/firefighters/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+        showToast(`Marked as ${status}.`, 'success');
+        loadFirefighters();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+  </script>
+</body>
+</html>

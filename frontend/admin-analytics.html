@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytics — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <script src="js/auth.js"></script>
+  <script src="js/app-shell.js"></script>
+  <script>
+    const session = requireAuth('Admin');
+
+    if (session) {
+      renderShell({
+        session,
+        activeHref: 'admin-analytics.html',
+        pageTitle: 'Analytics',
+        pageSubtitle: 'System-wide performance across incidents, fleet, and crew.',
+      });
+
+      document.getElementById('pageBody').innerHTML = `
+        <div class="kpi-grid" id="kpiGrid"></div>
+
+        <div class="content-grid">
+          <div class="card panel">
+            <div class="panel-header"><h3>Incidents — last 6 months</h3></div>
+            <canvas id="monthlyChart" height="120"></canvas>
+          </div>
+          <div class="card panel">
+            <div class="panel-header"><h3>Incidents by severity</h3></div>
+            <canvas id="severityChart" height="120"></canvas>
+          </div>
+        </div>
+
+        <div class="content-grid">
+          <div class="card panel">
+            <div class="panel-header"><h3>Incidents by status</h3></div>
+            <canvas id="statusChart" height="120"></canvas>
+          </div>
+          <div class="card panel">
+            <div class="panel-header"><h3>Recent activity</h3></div>
+            <div id="activityFeed">
+              <div class="skeleton skeleton-text" style="height:40px; margin-bottom:10px;"></div>
+              <div class="skeleton skeleton-text" style="height:40px; margin-bottom:10px;"></div>
+              <div class="skeleton skeleton-text" style="height:40px;"></div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      if (window.lucide) window.lucide.createIcons();
+      loadAnalytics();
+    }
+
+    async function loadAnalytics() {
+      try {
+        const [summary, monthly, activity, incidents] = await Promise.all([
+          apiAuth('/analytics/summary'),
+          apiAuth('/analytics/monthly-incidents'),
+          apiAuth('/analytics/activity?limit=10'),
+          apiAuth('/incidents'),
+        ]);
+        renderKpis(summary);
+        renderMonthlyChart(monthly);
+        renderSeverityChart(incidents);
+        renderStatusChart(incidents);
+        renderActivity(activity);
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function renderKpis(summary) {
+      const cards = [
+        { label: 'Total incidents', value: summary.incidents.total, icon: 'siren', bg: 'var(--color-danger-bg)', fg: 'var(--color-primary)' },
+        { label: 'Active incidents', value: summary.incidents.active, icon: 'activity', bg: 'var(--color-warning-bg)', fg: 'var(--color-warning)' },
+        { label: 'Resolved incidents', value: summary.incidents.resolved, icon: 'check-circle-2', bg: 'var(--color-success-bg)', fg: 'var(--color-success)' },
+        { label: 'Stations reporting', value: summary.stations, icon: 'building-2', bg: 'var(--color-info-bg)', fg: 'var(--color-info)' },
+      ];
+      document.getElementById('kpiGrid').innerHTML = cards.map((c) => `
+        <div class="card kpi-card">
+          <div class="kpi-card-top"><div class="kpi-icon" style="background:${c.bg}; color:${c.fg};"><i data-lucide="${c.icon}" class="icon"></i></div></div>
+          <div class="kpi-value">${c.value}</div>
+          <div class="kpi-label">${c.label}</div>
+        </div>
+      `).join('');
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    const isDark = () => document.body.classList.contains('dark');
+    const gridColor = () => (isDark() ? '#223151' : '#e6e8ee');
+    const tickColor = () => (isDark() ? '#aab3c5' : '#565d6d');
+
+    function renderMonthlyChart(monthly) {
+      const labels = monthly.map((m) => {
+        const [y, mo] = m.month.split('-');
+        return new Date(Number(y), Number(mo) - 1).toLocaleString('default', { month: 'short' });
+      });
+      const data = monthly.map((m) => m.count);
+      new Chart(document.getElementById('monthlyChart'), {
+        type: 'bar',
+        data: { labels: labels.length ? labels : ['No data yet'], datasets: [{ data: data.length ? data : [0], backgroundColor: '#b3261e', borderRadius: 6, maxBarThickness: 36 }] },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: tickColor() } },
+            y: { beginAtZero: true, ticks: { precision: 0, color: tickColor() }, grid: { color: gridColor() } },
+          },
+        },
+      });
+    }
+
+    function renderSeverityChart(incidents) {
+      const order = ['Critical', 'High', 'Medium', 'Low'];
+      const colors = { Critical: '#b3261e', High: '#f2731d', Medium: '#1d4ed8', Low: '#8a90a0' };
+      const counts = order.map((s) => incidents.filter((i) => i.severity === s).length);
+      new Chart(document.getElementById('severityChart'), {
+        type: 'doughnut',
+        data: { labels: order, datasets: [{ data: counts, backgroundColor: order.map((s) => colors[s]) }] },
+        options: { plugins: { legend: { position: 'bottom', labels: { color: tickColor(), boxWidth: 12, padding: 14 } } } },
+      });
+    }
+
+    function renderStatusChart(incidents) {
+      const order = ['Active', 'In Progress', 'Resolved'];
+      const colors = { Active: '#b3261e', 'In Progress': '#b45309', Resolved: '#15803d' };
+      const counts = order.map((s) => incidents.filter((i) => i.status === s).length);
+      new Chart(document.getElementById('statusChart'), {
+        type: 'bar',
+        data: { labels: order, datasets: [{ data: counts, backgroundColor: order.map((s) => colors[s]), borderRadius: 6, maxBarThickness: 46 }] },
+        options: {
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { beginAtZero: true, ticks: { precision: 0, color: tickColor() }, grid: { color: gridColor() } },
+            y: { grid: { display: false }, ticks: { color: tickColor() } },
+          },
+        },
+      });
+    }
+
+    const ACTIVITY_ICONS = { user: 'user', station: 'building-2', truck: 'truck', firefighter: 'flame', maintenance: 'wrench', incident: 'siren' };
+
+    function renderActivity(activity) {
+      const feed = document.getElementById('activityFeed');
+      if (!activity.length) {
+        feed.innerHTML = `<div class="empty-state"><div class="icon-wrap"><i data-lucide="inbox" class="icon"></i></div><h4>No activity yet</h4><p>Actions across the platform will show up here.</p></div>`;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+      feed.innerHTML = activity.map((a) => `
+        <div class="activity-item">
+          <div class="activity-dot"><i data-lucide="${ACTIVITY_ICONS[a.entity_type] || 'activity'}" class="icon" style="width:15px;height:15px;"></i></div>
+          <div>
+            <div class="activity-text"><strong>${a.user_name || 'System'}</strong> ${a.action.toLowerCase()}${a.details ? ` — ${a.details}` : ''}</div>
+            <div class="activity-time">${timeAgo(a.created_at)}</div>
+          </div>
+        </div>
+      `).join('');
+      if (window.lucide) window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

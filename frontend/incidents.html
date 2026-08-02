@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FireSys — Incidents</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .toast {
+      position: fixed; bottom: 28px; right: 28px;
+      background: var(--bg-elevated); border: 1px solid var(--accent-fire);
+      color: var(--text-primary); padding: 12px 20px;
+      border-radius: 3px; font-family: var(--font-mono); font-size: 12px;
+      letter-spacing: 0.1em; z-index: 1000;
+      box-shadow: var(--glow-fire);
+      transform: translateY(80px); opacity: 0;
+      transition: all 0.3s ease;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="toast" id="toast">✓ Incident recorded</div>
+
+<script src="js/app.js"></script>
+<script>
+document.getElementById('app').innerHTML = `
+  <div class="layout">
+    ${getSidebar('incidents')}
+    <div class="main-area">
+      ${getTopbar('Incidents', null)}
+      <div class="page-content">
+
+        <!-- Add incident form -->
+        <div class="panel animate-in">
+          <div class="panel-header">
+            <span class="panel-title"><span class="title-icon">＋</span> Report New Incident</span>
+          </div>
+          <div class="panel-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Location</label>
+                <input id="location" class="form-input" placeholder="e.g. MG Road, Block 4">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Incident Type</label>
+                <select id="type" class="form-select">
+                  <option value="">Select type...</option>
+                  <option>Structure Fire</option>
+                  <option>Vehicle Fire</option>
+                  <option>Chemical Fire</option>
+                  <option>Grass Fire</option>
+                  <option>Explosion</option>
+                  <option>Rescue</option>
+                  <option>Hazmat</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Severity Level</label>
+                <select id="severity" class="form-select">
+                  <option value="">Select severity...</option>
+                  <option>Critical</option>
+                  <option>High</option>
+                  <option>Medium</option>
+                  <option>Low</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-fire" onclick="addIncident()">
+              🚨 Report Incident
+            </button>
+          </div>
+        </div>
+
+        <!-- Incidents table -->
+        <div class="panel animate-in">
+          <div class="panel-header">
+            <span class="panel-title"><span class="title-icon">📋</span> All Incidents</span>
+            <div class="panel-actions">
+              <button class="btn btn-ghost btn-sm" onclick="loadIncidents()">↺ Refresh</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Location</th>
+                  <th>Type</th>
+                  <th>Severity</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="incidentTable">
+                <tr><td colspan="5"><div class="empty-state"><span class="empty-icon">⏳</span><p>Loading...</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+`;
+
+startClock();
+
+// --- LOCAL DEMO DATA (extends DEMO.incidents on add) ---
+let localIncidents = null;
+
+async function loadIncidents() {
+  const data = await apiFetch('/incidents');
+  localIncidents = data || DEMO.incidents.slice();
+
+  const tb = document.getElementById('incidentTable');
+  tb.innerHTML = localIncidents.length ? localIncidents.map(i => `
+    <tr>
+      <td class="td-id">#${i.id}</td>
+      <td class="td-primary">${i.location}</td>
+      <td>${i.type}</td>
+      <td>${severityBadge(i.severity)}</td>
+      <td>${statusBadge(i.status)}</td>
+    </tr>
+  `).join('') : `<tr><td colspan="5"><div class="empty-state"><span class="empty-icon">✓</span><p>No incidents recorded</p></div></td></tr>`;
+}
+
+async function addIncident() {
+  const location = document.getElementById('location').value.trim();
+  const type = document.getElementById('type').value;
+  const severity = document.getElementById('severity').value;
+
+  if (!location || !type || !severity) {
+    showToast('⚠ Fill all fields before submitting.', true);
+    return;
+  }
+
+  const body = JSON.stringify({ location, type, severity });
+  const res = await apiFetch('/incidents', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body
+  });
+
+  // Fallback: add to local demo
+  if (!res && localIncidents) {
+    const nextId = Math.max(...localIncidents.map(i => i.id), 0) + 1;
+    localIncidents.unshift({ id: nextId, location, type, severity, status: 'Active' });
+  }
+
+  // Clear form
+  document.getElementById('location').value = '';
+  document.getElementById('type').value = '';
+  document.getElementById('severity').value = '';
+
+  showToast('✓ Incident #' + (localIncidents ? Math.max(...localIncidents.map(i=>i.id)) : '?') + ' reported.');
+  loadIncidents();
+}
+
+function showToast(msg, error = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = error ? 'var(--accent-amber)' : 'var(--accent-fire)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+loadIncidents();
+</script>
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manage Firefighters — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+</head>
+<body>
+  <script src="js/auth.js"></script>
+  <script src="js/app-shell.js"></script>
+  <script>
+    const session = requireAuth('Admin');
+    let allFirefighters = [];
+    let stations = [];
+    let currentPage = 1;
+    const PAGE_SIZE = 8;
+    let activeFilter = 'All';
+    let searchTerm = '';
+
+    const STATUSES = ['Available', 'Busy', 'Standby', 'Off Duty'];
+    const STATUS_BADGE = { Available: 'badge-success', Busy: 'badge-danger', Standby: 'badge-warning', 'Off Duty': 'badge-neutral' };
+
+    if (session) {
+      renderShell({
+        session,
+        activeHref: 'admin-firefighters.html',
+        pageTitle: 'Manage Firefighters',
+        pageSubtitle: 'Duty status, rank, and station assignment across the roster.',
+      });
+
+      document.getElementById('pageBody').innerHTML = `
+        <div class="card panel">
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <div class="search-bar" style="width:240px;">
+                <i data-lucide="search" class="icon" style="width:15px;height:15px;"></i>
+                <input type="text" id="searchInput" placeholder="Search name or email…">
+              </div>
+              <select class="filter-select" id="statusFilter">
+                <option value="All">All statuses</option>
+                ${STATUSES.map((s) => `<option value="${s}">${s}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>Firefighter</th><th>Rank</th><th>Station</th><th>Phone</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody id="ffTbody">${skeletonRows(6, 5)}</tbody>
+            </table>
+          </div>
+          <div class="table-pagination">
+            <span id="paginationInfo"></span>
+            <div class="pagination-btns" id="paginationBtns"></div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('searchInput').addEventListener('input', (e) => { searchTerm = e.target.value.toLowerCase(); currentPage = 1; renderTable(); });
+      document.getElementById('statusFilter').addEventListener('change', (e) => { activeFilter = e.target.value; currentPage = 1; renderTable(); });
+
+      if (window.lucide) window.lucide.createIcons();
+      loadFirefighters();
+    }
+
+    async function loadFirefighters() {
+      try {
+        const [ffs, stationList] = await Promise.all([apiAuth('/firefighters'), apiAuth('/stations')]);
+        allFirefighters = ffs;
+        stations = stationList;
+        renderTable();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function filtered() {
+      return allFirefighters.filter((f) => {
+        const matchesStatus = activeFilter === 'All' || f.status === activeFilter;
+        const matchesSearch = !searchTerm || f.name.toLowerCase().includes(searchTerm) || (f.email || '').toLowerCase().includes(searchTerm);
+        return matchesStatus && matchesSearch;
+      });
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('ffTbody');
+      const rows = filtered();
+      const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+      currentPage = Math.min(currentPage, totalPages);
+      const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+      if (!pageRows.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon-wrap"><i data-lucide="flame" class="icon"></i></div><h4>No firefighters found</h4><p>Try a different search or filter.</p></div></td></tr>`;
+      } else {
+        tbody.innerHTML = pageRows.map((f) => `
+          <tr>
+            <td>
+              <div class="cell-user">
+                <div class="cell-avatar">${initials(f.name)}</div>
+                <div>
+                  <div style="font-weight:600;">${f.name}</div>
+                  <div style="font-size:12px; color:var(--text-muted);">${f.email}</div>
+                </div>
+              </div>
+            </td>
+            <td>${f.rank_title || '—'}</td>
+            <td>${f.station_name || '—'}</td>
+            <td>${f.phone || '—'}</td>
+            <td><span class="badge ${STATUS_BADGE[f.status] || 'badge-neutral'}">${f.status}</span></td>
+            <td>
+              <div class="row-actions">
+                <button class="btn-icon" title="Edit" onclick="openEditModal(${f.id})"><i data-lucide="pencil" class="icon" style="width:15px;height:15px;"></i></button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      document.getElementById('paginationInfo').textContent = rows.length
+        ? `Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, rows.length)} of ${rows.length}`
+        : 'No results';
+
+      const btns = document.getElementById('paginationBtns');
+      let html = `<button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})"><i data-lucide="chevron-left" class="icon" style="width:14px;height:14px;"></i></button>`;
+      for (let i = 1; i <= totalPages; i++) html += `<button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+      html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})"><i data-lucide="chevron-right" class="icon" style="width:14px;height:14px;"></i></button>`;
+      btns.innerHTML = html;
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function goToPage(p) { currentPage = p; renderTable(); }
+
+    function openEditModal(id) {
+      const f = allFirefighters.find((x) => x.id === id);
+      const stationOptions = stations.map((s) => `<option value="${s.id}" ${f.station_id === s.id ? 'selected' : ''}>${s.name}</option>`).join('');
+      const statusOptions = STATUSES.map((s) => `<option value="${s}" ${f.status === s ? 'selected' : ''}>${s}</option>`).join('');
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="modal card">
+          <div class="modal-header">
+            <h3>Edit firefighter</h3>
+            <button class="modal-close" id="closeModal"><i data-lucide="x" class="icon"></i></button>
+          </div>
+          <div id="modalBanner" class="banner banner-danger hidden"><i data-lucide="alert-circle" class="icon"></i><span></span></div>
+          <form id="ffForm" novalidate>
+            <div class="field"><input type="text" id="mRank" placeholder=" " value="${f.rank_title || ''}"><label>Rank / title</label></div>
+            <div class="field"><input type="text" id="mPhone" placeholder=" " value="${f.phone || ''}"><label>Phone</label></div>
+            <div class="field">
+              <select id="mStation" style="width:100%; height:52px; padding:0 16px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg-surface); color:var(--text-primary);">
+                <option value="">No station</option>
+                ${stationOptions}
+              </select>
+            </div>
+            <div class="field">
+              <select id="mStatus" style="width:100%; height:52px; padding:0 16px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg-surface); color:var(--text-primary);">
+                ${statusOptions}
+              </select>
+            </div>
+          </form>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancelModal">Cancel</button>
+            <button class="btn btn-primary" id="saveModal">Save changes</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('open'));
+      if (window.lucide) window.lucide.createIcons();
+
+      const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); };
+      overlay.querySelector('#closeModal').addEventListener('click', close);
+      overlay.querySelector('#cancelModal').addEventListener('click', close);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+      overlay.querySelector('#saveModal').addEventListener('click', async () => {
+        const btn = overlay.querySelector('#saveModal');
+        const banner = overlay.querySelector('#modalBanner');
+        try {
+          setButtonLoading(btn, true, 'Saving…');
+          await apiAuth(`/firefighters/${f.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              rankTitle: overlay.querySelector('#mRank').value.trim() || null,
+              phone: overlay.querySelector('#mPhone').value.trim() || null,
+              stationId: overlay.querySelector('#mStation').value || null,
+              status: overlay.querySelector('#mStatus').value,
+            }),
+          });
+          showToast('Firefighter updated.', 'success');
+          close();
+          loadFirefighters();
+        } catch (err) {
+          banner.classList.remove('hidden');
+          banner.querySelector('span').textContent = err.message;
+          setButtonLoading(btn, false);
+        }
+      });
+    }
+  </script>
+</body>
+</html>

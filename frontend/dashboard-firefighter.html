@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Dashboard — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+</head>
+<body>
+  <script src="js/auth.js"></script>
+  <script src="js/app-shell.js"></script>
+  <script>
+    const session = requireAuth('Firefighter');
+    let me = null;
+
+    const STATUSES = ['Available', 'Busy', 'Standby', 'Off Duty'];
+    const STATUS_BADGE = { Available: 'badge-success', Busy: 'badge-danger', Standby: 'badge-warning', 'Off Duty': 'badge-neutral' };
+    const SEVERITY_BADGE = { Critical: 'badge-danger', High: 'badge-warning', Medium: 'badge-info', Low: 'badge-neutral' };
+    const STATUS_BADGE_INC = { Active: 'badge-danger', 'In Progress': 'badge-warning', Resolved: 'badge-success' };
+
+    if (session) {
+      renderShell({
+        session,
+        activeHref: 'dashboard-firefighter.html',
+        pageTitle: 'My incidents',
+        pageSubtitle: `Welcome back, ${session.user.name.split(' ')[0]}. Here's the current picture.`,
+      });
+
+      document.getElementById('pageBody').innerHTML = `
+        <div class="content-grid">
+          <div class="card panel">
+            <div class="panel-header"><h3>My status</h3></div>
+            <div id="statusPanel">
+              <div class="skeleton skeleton-text" style="height:40px;"></div>
+            </div>
+          </div>
+          <div class="card panel">
+            <div class="panel-header"><h3>Quick actions</h3></div>
+            <div class="quick-actions">
+              <a href="firefighter-profile.html" class="quick-action-btn">
+                <div class="icon-wrap"><i data-lucide="user" class="icon"></i></div>
+                My profile
+              </a>
+              <button class="quick-action-btn" id="toggleDutyBtn" style="cursor:pointer; text-align:left; border:1px solid var(--border-subtle);">
+                <div class="icon-wrap"><i data-lucide="power" class="icon"></i></div>
+                <span id="toggleDutyLabel">Loading…</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="panel-header"><h3>Active incidents in your system</h3></div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Location</th><th>Type</th><th>Severity</th><th>Status</th></tr></thead>
+              <tbody id="incidentsTbody">${skeletonRows(4, 4)}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      if (window.lucide) window.lucide.createIcons();
+      loadDashboard();
+    }
+
+    async function loadDashboard() {
+      try {
+        const [firefighters, incidents] = await Promise.all([apiAuth('/firefighters'), apiAuth('/incidents')]);
+        me = firefighters.find((f) => f.user_id === session.user.id) || null;
+        renderStatus();
+        renderIncidents(incidents);
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function renderStatus() {
+      const panel = document.getElementById('statusPanel');
+      if (!me) {
+        panel.innerHTML = `<div class="empty-state"><div class="icon-wrap"><i data-lucide="user-x" class="icon"></i></div><h4>No profile found</h4><p>Contact your admin to link your account to a firefighter profile.</p></div>`;
+        document.getElementById('toggleDutyBtn').style.display = 'none';
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+      panel.innerHTML = `
+        <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
+          <div class="cell-avatar" style="width:44px; height:44px; font-size:15px;">${initials(session.user.name)}</div>
+          <div>
+            <div style="font-weight:700; font-size:15px;">${session.user.name}</div>
+            <div style="font-size:12.5px; color:var(--text-muted);">${me.rank_title || 'Firefighter'} · ${me.station_name || 'Unassigned station'}</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:13px; color:var(--text-secondary);">Current status</span>
+          <span class="badge ${STATUS_BADGE[me.status] || 'badge-neutral'}">${me.status}</span>
+        </div>
+      `;
+      const label = document.getElementById('toggleDutyLabel');
+      const nextStatus = me.status === 'Available' ? 'Off Duty' : 'Available';
+      label.textContent = me.status === 'Available' ? 'Go off duty' : 'Go on duty (Available)';
+      document.getElementById('toggleDutyBtn').onclick = () => setStatus(nextStatus);
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    async function setStatus(status) {
+      if (!me) return;
+      try {
+        await apiAuth(`/firefighters/${me.id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+        showToast(`Status updated to ${status}.`, 'success');
+        loadDashboard();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function renderIncidents(incidents) {
+      const active = incidents.filter((i) => i.status !== 'Resolved').slice(0, 8);
+      const tbody = document.getElementById('incidentsTbody');
+      if (!active.length) {
+        tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><div class="icon-wrap"><i data-lucide="check-circle-2" class="icon"></i></div><h4>All clear</h4><p>No active incidents right now.</p></div></td></tr>`;
+      } else {
+        tbody.innerHTML = active.map((i) => `
+          <tr>
+            <td style="font-weight:600;">${i.location}</td>
+            <td>${i.type}</td>
+            <td><span class="badge ${SEVERITY_BADGE[i.severity] || 'badge-neutral'}">${i.severity}</span></td>
+            <td><span class="badge ${STATUS_BADGE_INC[i.status] || 'badge-neutral'}">${i.status}</span></td>
+          </tr>
+        `).join('');
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

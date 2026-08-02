@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FireSys — Dispatch</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .toast {
+      position: fixed; bottom: 28px; right: 28px;
+      background: var(--bg-elevated); border: 1px solid var(--accent-fire);
+      color: var(--text-primary); padding: 12px 20px;
+      border-radius: 3px; font-family: var(--font-mono); font-size: 12px;
+      letter-spacing: 0.1em; z-index: 1000;
+      box-shadow: var(--glow-fire);
+      transform: translateY(80px); opacity: 0;
+      transition: all 0.3s ease;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    .dispatch-alert {
+      padding: 16px 20px;
+      background: rgba(255, 74, 28, 0.08);
+      border: 1px solid rgba(255, 74, 28, 0.25);
+      border-radius: 3px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .dispatch-alert-icon { font-size: 20px; }
+    .dispatch-alert-text { font-family: var(--font-mono); font-size: 12px; color: var(--accent-fire); letter-spacing: 0.1em; }
+  </style>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+<script>
+document.getElementById('app').innerHTML = `
+  <div class="layout">
+    ${getSidebar('dispatch')}
+    <div class="main-area">
+      ${getTopbar('Dispatch Control', '3 ACTIVE INCIDENTS')}
+      <div class="page-content">
+
+        <div class="dispatch-alert">
+          <span class="dispatch-alert-icon">📡</span>
+          <span class="dispatch-alert-text">DISPATCH CENTER — Assign trucks to active incidents. Status updates automatically upon dispatch.</span>
+        </div>
+
+        <!-- Dispatch form -->
+        <div class="panel animate-in">
+          <div class="panel-header">
+            <span class="panel-title"><span class="title-icon">📡</span> Assign Unit to Incident</span>
+          </div>
+          <div class="panel-body">
+            <div class="form-grid form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Incident ID</label>
+                <input id="incidentId" class="form-input" placeholder="e.g. 3" type="number" min="1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Truck ID</label>
+                <input id="truckId" class="form-input" placeholder="e.g. 1" type="number" min="1">
+              </div>
+            </div>
+            <button class="btn btn-fire" onclick="dispatchUnit()">
+              📡 Dispatch Unit
+            </button>
+          </div>
+        </div>
+
+        <!-- Active Incidents reference -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="panel animate-in">
+            <div class="panel-header">
+              <span class="panel-title"><span class="title-icon">🚨</span> Active Incidents</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>ID</th><th>Location</th><th>Type</th><th>Status</th></tr>
+                </thead>
+                <tbody id="incidentRef">
+                  <tr><td colspan="4"><div class="empty-state"><span class="empty-icon">⏳</span><p>Loading...</p></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel animate-in">
+            <div class="panel-header">
+              <span class="panel-title"><span class="title-icon">🚒</span> Available Trucks</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>ID</th><th>Unit</th><th>Status</th></tr>
+                </thead>
+                <tbody id="truckRef">
+                  <tr><td colspan="3"><div class="empty-state"><span class="empty-icon">⏳</span><p>Loading...</p></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dispatch log -->
+        <div class="panel animate-in" style="margin-top:16px">
+          <div class="panel-header">
+            <span class="panel-title"><span class="title-icon">📝</span> Dispatch Log</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Incident ID</th><th>Truck ID</th><th>Action</th></tr>
+              </thead>
+              <tbody id="dispatchLog">
+                <tr><td colspan="4"><div class="empty-state"><span class="empty-icon">📝</span><p>No dispatches yet this session</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+`;
+
+startClock();
+
+const dispatchHistory = [];
+
+async function loadRefs() {
+  const incidents = await apiFetch('/incidents') || DEMO.incidents;
+  const trucks = await apiFetch('/trucks') || DEMO.trucks;
+
+  const iRef = document.getElementById('incidentRef');
+  const active = incidents.filter(i => i.status !== 'Resolved');
+  iRef.innerHTML = active.length ? active.map(i => `
+    <tr>
+      <td class="td-id">#${i.id}</td>
+      <td class="td-primary">${i.location}</td>
+      <td>${i.type}</td>
+      <td>${statusBadge(i.status)}</td>
+    </tr>
+  `).join('') : `<tr><td colspan="4"><div class="empty-state"><span class="empty-icon">✓</span><p>No active incidents</p></div></td></tr>`;
+
+  const tRef = document.getElementById('truckRef');
+  tRef.innerHTML = trucks.map(t => `
+    <tr>
+      <td class="td-id">#${t.id}</td>
+      <td class="td-primary">${t.name}</td>
+      <td>${statusBadge(t.status)}</td>
+    </tr>
+  `).join('');
+}
+
+async function dispatchUnit() {
+  const incidentId = document.getElementById('incidentId').value.trim();
+  const truckId = document.getElementById('truckId').value.trim();
+
+  if (!incidentId || !truckId) {
+    showToast('⚠ Enter both Incident ID and Truck ID.'); return;
+  }
+
+  await apiFetch('/dispatch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ incidentId: +incidentId, truckId: +truckId })
+  });
+
+  // Log it
+  const now = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  dispatchHistory.unshift({ time: now, incidentId, truckId });
+
+  const log = document.getElementById('dispatchLog');
+  log.innerHTML = dispatchHistory.map(d => `
+    <tr>
+      <td class="td-id text-mono">${d.time}</td>
+      <td><span class="badge badge-active">#${d.incidentId}</span></td>
+      <td><span class="badge badge-busy">TRK-${d.truckId.toString().padStart(3,'0')}</span></td>
+      <td><span class="badge badge-progress">Dispatched</span></td>
+    </tr>
+  `).join('');
+
+  document.getElementById('incidentId').value = '';
+  document.getElementById('truckId').value = '';
+  showToast(`✓ Unit TRK-${truckId.padStart(3,'0')} dispatched to Incident #${incidentId}`);
+  loadRefs();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+loadRefs();
+</script>
+</body>
+</html>

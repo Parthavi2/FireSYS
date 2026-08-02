@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FireSys — Dashboard</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div id="app"></div>
+
+<script src="js/app.js"></script>
+<script>
+// --- RENDER LAYOUT ---
+document.getElementById('app').innerHTML = `
+  <div class="layout">
+    ${getSidebar('dashboard')}
+    <div class="main-area">
+      ${getTopbar('Dashboard', null)}
+      <div class="page-content" id="pageContent">
+        <!-- cards -->
+        <div class="cards">
+          <div class="card card-fire animate-in">
+            <span class="card-icon">🚨</span>
+            <span class="card-label">Active Incidents</span>
+            <span class="card-value" id="cardActive">—</span>
+            <div class="card-sub"><span class="alert">● LIVE</span></div>
+          </div>
+          <div class="card card-amber animate-in">
+            <span class="card-icon">🔥</span>
+            <span class="card-label">Total Incidents</span>
+            <span class="card-value" id="cardTotal">—</span>
+            <div class="card-sub">All time records</div>
+          </div>
+          <div class="card card-green animate-in">
+            <span class="card-icon">🚒</span>
+            <span class="card-label">Available Trucks</span>
+            <span class="card-value" id="cardTrucks">—</span>
+            <div class="card-sub"><span class="up">● READY</span></div>
+          </div>
+          <div class="card card-cyan animate-in">
+            <span class="card-icon">👷</span>
+            <span class="card-label">Firefighters</span>
+            <span class="card-value" id="cardFF">—</span>
+            <div class="card-sub">Personnel on duty</div>
+          </div>
+        </div>
+
+        <!-- recent incidents table -->
+        <div class="panel animate-in">
+          <div class="panel-header">
+            <span class="panel-title">
+              <span class="title-icon">📋</span>
+              Recent Incidents
+            </span>
+            <div class="panel-actions">
+              <button class="btn btn-outline btn-sm" onclick="loadDashboard()">↺ Refresh</button>
+              <a href="incidents.html" class="btn btn-fire btn-sm">+ New Incident</a>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Location</th>
+                  <th>Type</th>
+                  <th>Severity</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="incidentTable">
+                <tr><td colspan="5"><div class="empty-state"><span class="empty-icon">⏳</span><p>Loading...</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- bottom row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+          <!-- firefighters panel -->
+          <div class="panel animate-in">
+            <div class="panel-header">
+              <span class="panel-title"><span class="title-icon">👷</span> Personnel Status</span>
+              <a href="firefighters.html" class="btn btn-ghost btn-sm">View All ›</a>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>#</th><th>Name</th><th>Status</th></tr>
+                </thead>
+                <tbody id="ffTable">
+                  <tr><td colspan="3"><div class="empty-state"><span class="empty-icon">⏳</span><p>Loading...</p></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- trucks panel -->
+          <div class="panel animate-in">
+            <div class="panel-header">
+              <span class="panel-title"><span class="title-icon">🚒</span> Fleet Status</span>
+              <a href="dispatch.html" class="btn btn-ghost btn-sm">Dispatch ›</a>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Unit</th><th>Name</th><th>Status</th></tr>
+                </thead>
+                <tbody id="truckTable">
+                  <tr><td colspan="3"><div class="empty-state"><span class="empty-icon">⏳</span><p>Loading...</p></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+`;
+
+startClock();
+
+// --- DATA LOAD ---
+async function loadDashboard() {
+  let incidents = await apiFetch('/incidents') || DEMO.incidents;
+  let firefighters = await apiFetch('/firefighters') || DEMO.firefighters;
+  let trucks = await apiFetch('/trucks') || DEMO.trucks;
+
+  // Cards
+  const active = incidents.filter(i => i.status === 'Active').length;
+  document.getElementById('cardActive').textContent = active;
+  document.getElementById('cardTotal').textContent = incidents.length;
+  document.getElementById('cardTrucks').textContent = trucks.filter(t => t.status === 'Available').length;
+  document.getElementById('cardFF').textContent = firefighters.length;
+
+  // Incidents table
+  const iTb = document.getElementById('incidentTable');
+  iTb.innerHTML = incidents.length ? incidents.slice(0, 8).map(i => `
+    <tr>
+      <td class="td-id">#${i.id}</td>
+      <td class="td-primary">${i.location}</td>
+      <td>${i.type}</td>
+      <td>${severityBadge(i.severity)}</td>
+      <td>${statusBadge(i.status)}</td>
+    </tr>
+  `).join('') : `<tr><td colspan="5"><div class="empty-state"><span class="empty-icon">✓</span><p>No incidents</p></div></td></tr>`;
+
+  // Firefighters table
+  const fTb = document.getElementById('ffTable');
+  fTb.innerHTML = firefighters.slice(0, 5).map(f => `
+    <tr>
+      <td class="td-id">#${f.id}</td>
+      <td class="td-primary">${f.name}</td>
+      <td>${statusBadge(f.status)}</td>
+    </tr>
+  `).join('');
+
+  // Trucks table
+  const tTb = document.getElementById('truckTable');
+  tTb.innerHTML = trucks.map(t => `
+    <tr>
+      <td class="td-id">#${t.id}</td>
+      <td class="td-primary">${t.name}</td>
+      <td>${statusBadge(t.status)}</td>
+    </tr>
+  `).join('');
+}
+
+loadDashboard();
+setInterval(loadDashboard, 8000);
+</script>
+</body>
+</html>

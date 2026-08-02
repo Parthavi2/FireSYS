@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FireSys — Firefighters</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .toast {
+      position: fixed; bottom: 28px; right: 28px;
+      background: var(--bg-elevated); border: 1px solid var(--accent-green);
+      color: var(--text-primary); padding: 12px 20px;
+      border-radius: 3px; font-family: var(--font-mono); font-size: 12px;
+      letter-spacing: 0.1em; z-index: 1000;
+      box-shadow: var(--glow-green);
+      transform: translateY(80px); opacity: 0;
+      transition: all 0.3s ease;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    .stat-strip {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .stat-chip {
+      padding: 8px 16px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-subtle);
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+      letter-spacing: 0.1em;
+    }
+    .stat-chip .val {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+  </style>
+</head>
+<body>
+
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+<script>
+document.getElementById('app').innerHTML = `
+  <div class="layout">
+    ${getSidebar('firefighters')}
+    <div class="main-area">
+      ${getTopbar('Personnel Management', null)}
+      <div class="page-content">
+
+        <!-- Stats strip -->
+        <div class="stat-strip" id="statStrip">
+          <div class="stat-chip"><span class="val" id="sTotal">—</span> Total</div>
+          <div class="stat-chip"><span class="val" id="sAvailable">—</span> Available</div>
+          <div class="stat-chip"><span class="val" id="sBusy">—</span> On Duty</div>
+          <div class="stat-chip"><span class="val" id="sStandby">—</span> Standby</div>
+        </div>
+
+        <!-- Add firefighter form -->
+        <div class="panel animate-in">
+          <div class="panel-header">
+            <span class="panel-title"><span class="title-icon">＋</span> Enrol Personnel</span>
+          </div>
+          <div class="panel-body">
+            <div class="form-grid form-grid-2">
+              <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input id="name" class="form-input" placeholder="e.g. Rajesh Patil" onkeydown="if(event.key==='Enter') addFirefighter()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Initial Status</label>
+                <select id="ffStatus" class="form-select">
+                  <option value="Available">Available</option>
+                  <option value="Standby">Standby</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-fire" onclick="addFirefighter()">
+              + Enrol Firefighter
+            </button>
+          </div>
+        </div>
+
+        <!-- Firefighters table -->
+        <div class="panel animate-in">
+          <div class="panel-header">
+            <span class="panel-title"><span class="title-icon">👷</span> All Personnel</span>
+            <button class="btn btn-ghost btn-sm" onclick="loadFirefighters()">↺ Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="firefighterTable">
+                <tr><td colspan="3"><div class="empty-state"><span class="empty-icon">⏳</span><p>Loading...</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+`;
+
+startClock();
+
+let localFF = null;
+
+async function loadFirefighters() {
+  const data = await apiFetch('/firefighters');
+  localFF = data || DEMO.firefighters.slice();
+
+  // Stats
+  document.getElementById('sTotal').textContent = localFF.length;
+  document.getElementById('sAvailable').textContent = localFF.filter(f => f.status === 'Available').length;
+  document.getElementById('sBusy').textContent = localFF.filter(f => f.status === 'Busy').length;
+  document.getElementById('sStandby').textContent = localFF.filter(f => f.status === 'Standby').length;
+
+  const tb = document.getElementById('firefighterTable');
+  tb.innerHTML = localFF.length ? localFF.map(f => `
+    <tr>
+      <td class="td-id">#${f.id}</td>
+      <td class="td-primary">${f.name}</td>
+      <td>${statusBadge(f.status)}</td>
+    </tr>
+  `).join('') : `<tr><td colspan="3"><div class="empty-state"><span class="empty-icon">👷</span><p>No personnel enrolled</p></div></td></tr>`;
+}
+
+async function addFirefighter() {
+  const name = document.getElementById('name').value.trim();
+  const status = document.getElementById('ffStatus').value;
+
+  if (!name) {
+    showToast('⚠ Enter a name.'); return;
+  }
+
+  const res = await apiFetch('/firefighters', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name })
+  });
+
+  if (!res && localFF) {
+    const nextId = Math.max(...localFF.map(f => f.id), 0) + 1;
+    localFF.push({ id: nextId, name, status });
+  }
+
+  document.getElementById('name').value = '';
+  showToast(`✓ ${name} enrolled.`);
+  loadFirefighters();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+loadFirefighters();
+</script>
+</body>
+</html>

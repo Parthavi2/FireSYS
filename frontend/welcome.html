@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FireSYS — Emergency Response Management Platform</title>
+<meta name="description" content="FireSYS is a centralized emergency response platform for fire departments — unifying incident command, dispatch operations, personnel, fleet, and operational analytics.">
+<link rel="stylesheet" href="css/design-system.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+<style>
+  :root {
+    --font-display: 'Space Grotesk', 'Manrope', sans-serif;
+    --font-ui: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  html { scroll-behavior: smooth; }
+  body { overflow-x: hidden; font-family: var(--font-ui); }
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.015em; }
+
+  /* ==========================================================
+     TOP NAV
+  ========================================================== */
+  .lp-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 48px;
+    background: rgba(8, 12, 22, 0.45);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    transition: background var(--transition), padding var(--transition);
+  }
+  .lp-nav.scrolled { padding: 12px 48px; background: rgba(7, 11, 20, 0.92); box-shadow: 0 4px 24px rgba(0,0,0,0.25); }
+  .lp-brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+  .lp-brand-mark {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-glow-primary);
+    flex-shrink: 0;
+  }
+  .lp-brand-mark .icon { width: 20px; height: 20px; color: #fff; }
+  .lp-brand-name { font-family: var(--font-display); font-size: 19px; font-weight: 700; color: #fff; letter-spacing: -0.01em; }
+  .lp-brand-tag { font-size: 10.5px; color: rgba(255,255,255,0.55); letter-spacing: 0.04em; text-transform: uppercase; margin-top: -1px; }
+
+  .lp-nav-links { display: flex; align-items: center; gap: 36px; }
+  .lp-nav-links a {
+    font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.78);
+    text-decoration: none; transition: color var(--transition);
+  }
+  .lp-nav-links a:hover { color: #fff; }
+  .lp-nav-actions { display: flex; align-items: center; gap: 12px; }
+  .lp-nav-actions .theme-toggle { border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: #fff; }
+  .lp-nav-actions .btn-secondary {
+    background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.22);
+  }
+  .lp-nav-actions .btn-secondary:hover { background: rgba(255,255,255,0.15); }
+
+  @media (max-width: 900px) {
+    .lp-nav { padding: 14px 20px; }
+    .lp-nav-links { display: none; }
+  }
+
+  /* ==========================================================
+     HERO — full-bleed emergency-response photography
+  ========================================================== */
+  .lp-hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 140px 24px 90px;
+    isolation: isolate;
+    text-align: center;
+  }
+  .lp-hero-bg {
+    position: absolute; inset: 0; z-index: -2;
+    background-image: url('https://images.stockcake.com/public/f/0/1/f010349a-e97b-44b4-99b1-a9b94b14568c_large/emergency-night-response-stockcake.jpg');
+    background-size: cover;
+    background-position: center 60%;
+  }
+  .lp-hero-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      linear-gradient(180deg, rgba(5,8,16,0.35) 0%, rgba(6,10,19,0.72) 58%, rgba(6,10,19,0.98) 100%),
+      linear-gradient(100deg, rgba(6,10,19,0.92) 0%, rgba(6,10,19,0.25) 50%, rgba(6,10,19,0.82) 100%);
+  }
+  .lp-hero-inner { max-width: 900px; position: relative; z-index: 2; }
+  .lp-eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 16px; border-radius: var(--radius-pill);
+    background: rgba(179, 38, 30, 0.2); border: 1px solid rgba(255,255,255,0.18);
+    color: #ffd9d5;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 30px;
+  }
+  .lp-eyebrow .icon { width: 13px; height: 13px; }
+  .lp-hero h1 {
+    font-weight: 700;
+    font-size: 84px; line-height: 0.98; letter-spacing: -0.03em;
+    color: #fff; margin-bottom: 16px;
+    text-shadow: 0 6px 40px rgba(0,0,0,0.45);
+  }
+  .lp-hero h2 {
+    font-weight: 600;
+    font-size: 27px; letter-spacing: -0.01em;
+    color: #ffb49b;
+    margin-bottom: 28px;
+  }
+  .lp-hero p {
+    font-family: var(--font-ui);
+    font-size: 18.5px; line-height: 1.65; color: rgba(255,255,255,0.85);
+    max-width: 700px; margin: 0 auto 42px;
+  }
+  .lp-hero-cta { display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
+  .btn-lg { height: 54px; padding: 0 30px; font-size: 15.5px; border-radius: var(--radius-sm); font-family: var(--font-ui); font-weight: 700; }
+  .btn-hero-primary {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    color: #fff; box-shadow: 0 12px 32px rgba(179,38,30,0.5);
+  }
+  .btn-hero-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 40px rgba(179,38,30,0.6); }
+  .btn-hero-ghost {
+    background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.28);
+    backdrop-filter: blur(6px);
+  }
+  .btn-hero-ghost:hover { background: rgba(255,255,255,0.16); }
+
+  .lp-hero-stats {
+    position: relative; z-index: 2;
+    display: flex; justify-content: center; gap: 56px; flex-wrap: wrap;
+    margin-top: 70px; padding-top: 36px; border-top: 1px solid rgba(255,255,255,0.16);
+    max-width: 760px; margin-left: auto; margin-right: auto;
+  }
+  .lp-hero-stat { text-align: center; }
+  .lp-hero-stat-value { font-family: var(--font-display); font-size: 27px; font-weight: 700; color: #fff; }
+  .lp-hero-stat-label { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px; letter-spacing: 0.02em; }
+
+  .lp-scroll-cue {
+    position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%);
+    z-index: 2; color: rgba(255,255,255,0.55);
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    animation: bob 2.2s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 8px); } }
+
+  @media (max-width: 700px) {
+    .lp-hero h1 { font-size: 46px; }
+    .lp-hero h2 { font-size: 19px; }
+    .lp-hero p { font-size: 16px; }
+    .lp-hero-stats { gap: 32px; }
+  }
+
+  /* ==========================================================
+     SHARED SECTION LAYOUT
+  ========================================================== */
+  .lp-section { padding: 116px 24px; position: relative; }
+  .lp-section-alt { background: var(--bg-surface-alt); }
+  .lp-container { max-width: 1180px; margin: 0 auto; }
+  .lp-container-narrow { max-width: 820px; margin: 0 auto; }
+  .lp-section-head { text-align: center; margin-bottom: 60px; }
+  .lp-kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    font-family: var(--font-ui);
+    color: var(--color-primary); margin-bottom: 16px;
+  }
+  .lp-kicker::before, .lp-kicker::after { content: ''; width: 20px; height: 1px; background: var(--color-primary); opacity: 0.5; }
+  .lp-section-head h2 {
+    font-size: 38px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 16px;
+  }
+  .lp-section-head p { font-size: 16.5px; color: var(--text-secondary); max-width: 620px; margin: 0 auto; line-height: 1.65; }
+
+  /* ==========================================================
+     ABOUT — split layout with photography
+  ========================================================== */
+  .lp-about-grid {
+    display: grid; grid-template-columns: 1fr 0.95fr; gap: 64px; align-items: center;
+  }
+  .lp-kicker-left { justify-content: flex-start; }
+  .lp-kicker-left::before { display: none; }
+  .lp-about-copy h2 { font-size: 34px; margin-bottom: 20px; text-align: left; }
+  .lp-about-text { font-size: 16.5px; line-height: 1.85; color: var(--text-secondary); }
+  .lp-about-marks {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px;
+    margin-top: 40px;
+  }
+  .lp-about-mark {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; border-radius: var(--radius-sm);
+    background: var(--bg-surface); border: 1px solid var(--border-subtle);
+  }
+  .lp-about-mark .icon-wrap {
+    width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0;
+    background: var(--color-primary-light); display: flex; align-items: center; justify-content: center;
+  }
+  .lp-about-mark .icon { color: var(--color-primary); width: 18px; height: 18px; }
+  .lp-about-mark span { display: block; font-size: 13.5px; font-weight: 700; color: var(--text-primary); }
+
+  .lp-about-media { position: relative; }
+  .lp-about-photo {
+    width: 100%; height: 460px; object-fit: cover; border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    display: block;
+  }
+  .lp-about-float {
+    position: absolute; bottom: -24px; left: -24px;
+    padding: 18px 22px; display: flex; align-items: center; gap: 14px;
+    border-radius: var(--radius-md);
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgba(255,255,255,0.35);
+    box-shadow: var(--shadow-lg);
+  }
+  body.dark .lp-about-float { border-color: rgba(255,255,255,0.1); }
+  .lp-about-float .icon-wrap {
+    width: 42px; height: 42px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lp-about-float .icon { color: #fff; width: 20px; height: 20px; }
+  .lp-about-float-value { font-family: var(--font-display); font-size: 19px; font-weight: 700; }
+  .lp-about-float-label { font-size: 11.5px; color: var(--text-muted); }
+
+  @media (max-width: 980px) {
+    .lp-about-grid { grid-template-columns: 1fr; }
+    .lp-about-copy h2 { text-align: center; }
+    .lp-about-copy .lp-kicker-left { justify-content: center; }
+    .lp-about-photo { height: 320px; }
+    .lp-about-float { left: 16px; }
+  }
+
+  /* ==========================================================
+     ROLE CARDS
+  ========================================================== */
+  .lp-role-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px;
+  }
+  .lp-role-card {
+    padding: 36px 30px 32px; position: relative; overflow: hidden;
+  }
+  .lp-role-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+    opacity: 0; transition: opacity var(--transition);
+  }
+  .lp-role-card:hover::before { opacity: 1; }
+  .lp-role-card:hover { transform: translateY(-5px); }
+  .lp-role-icon {
+    width: 54px; height: 54px; border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center; margin-bottom: 24px;
+    background: linear-gradient(135deg, var(--color-secondary), #060c17);
+  }
+  .lp-role-icon .icon { width: 25px; height: 25px; color: #ff9c7a; }
+  .lp-role-card h3 { font-size: 20px; margin-bottom: 6px; }
+  .lp-role-card .lp-role-tag { font-size: 12.5px; color: var(--text-muted); margin-bottom: 22px; display: block; font-family: var(--font-ui); }
+  .lp-role-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 13px; }
+  .lp-role-list li {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14.5px; color: var(--text-secondary); font-weight: 600;
+  }
+  .lp-role-list .icon { width: 15px; height: 15px; color: var(--color-primary); flex-shrink: 0; }
+
+  @media (max-width: 980px) {
+    .lp-role-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ==========================================================
+     PHOTO BANNER — full-bleed break between sections
+  ========================================================== */
+  .lp-banner {
+    position: relative;
+    min-height: 420px;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+    isolation: isolate;
+    padding: 80px 24px;
+  }
+  .lp-banner-bg {
+    position: absolute; inset: 0; z-index: -2;
+    background-image: url('https://images.unsplash.com/photo-1643695768155-47bf0616d866?q=80&w=2400&auto=format&fit=crop');
+    background-size: cover;
+    background-position: center 40%;
+    background-attachment: fixed;
+  }
+  .lp-banner-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(6,10,19,0.88) 0%, rgba(6,10,19,0.75) 50%, rgba(6,10,19,0.9) 100%);
+  }
+  .lp-banner-inner { max-width: 760px; position: relative; z-index: 2; }
+  .lp-banner h2 { color: #fff; font-size: 34px; margin-bottom: 16px; }
+  .lp-banner p { color: rgba(255,255,255,0.78); font-size: 16.5px; line-height: 1.7; font-family: var(--font-ui); }
+  .lp-banner-row {
+    display: flex; justify-content: center; gap: 48px; margin-top: 40px; flex-wrap: wrap;
+  }
+  .lp-banner-stat-value { font-family: var(--font-display); color: #fff; font-size: 24px; font-weight: 700; }
+  .lp-banner-stat-label { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+
+  @media (max-width: 700px) {
+    .lp-banner-bg { background-attachment: scroll; }
+    .lp-banner h2 { font-size: 26px; }
+  }
+
+  /* ==========================================================
+     CAPABILITY CARDS
+  ========================================================== */
+  .lp-cap-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px;
+  }
+  .lp-cap-card {
+    padding: 30px; display: flex; flex-direction: column; gap: 16px;
+    background: var(--bg-surface);
+  }
+  .lp-cap-card:hover { transform: translateY(-3px); }
+  .lp-cap-icon {
+    width: 46px; height: 46px; border-radius: var(--radius-sm);
+    background: var(--color-accent-light); display: flex; align-items: center; justify-content: center;
+  }
+  .lp-cap-icon .icon { width: 22px; height: 22px; color: var(--color-accent); }
+  .lp-cap-card h4 { font-size: 16.5px; margin-bottom: 4px; }
+  .lp-cap-card p { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; font-family: var(--font-ui); }
+
+  @media (max-width: 980px) {
+    .lp-cap-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 640px) {
+    .lp-cap-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ==========================================================
+     SECURE ACCESS
+  ========================================================== */
+  .lp-secure {
+    border-radius: var(--radius-lg);
+    padding: 76px 48px;
+    text-align: center;
+    position: relative; overflow: hidden;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(179,38,30,0.38), transparent 45%),
+      radial-gradient(circle at 85% 80%, rgba(242,115,29,0.3), transparent 45%),
+      linear-gradient(160deg, var(--color-secondary) 0%, #060c17 100%);
+    box-shadow: var(--shadow-lg);
+  }
+  .lp-secure-icon {
+    width: 66px; height: 66px; border-radius: 18px; margin: 0 auto 28px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: var(--shadow-glow-primary);
+  }
+  .lp-secure-icon .icon { width: 30px; height: 30px; color: #fff; }
+  .lp-secure h2 { color: #fff; font-size: 34px; margin-bottom: 14px; }
+  .lp-secure p { color: rgba(255,255,255,0.72); font-size: 16px; max-width: 560px; margin: 0 auto 36px; line-height: 1.6; font-family: var(--font-ui); }
+  .lp-secure-badges {
+    display: flex; justify-content: center; gap: 28px; margin-top: 42px; flex-wrap: wrap;
+  }
+  .lp-secure-badge {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12.5px; color: rgba(255,255,255,0.6); font-weight: 600; font-family: var(--font-ui);
+  }
+  .lp-secure-badge .icon { width: 15px; height: 15px; color: #ff9c7a; }
+
+  /* ==========================================================
+     FOOTER
+  ========================================================== */
+  .lp-footer {
+    background: var(--color-secondary);
+    color: rgba(255,255,255,0.65);
+    padding: 64px 24px 28px;
+  }
+  body.dark .lp-footer { background: #060a13; }
+  .lp-footer-inner { max-width: 1180px; margin: 0 auto; }
+  .lp-footer-top {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 40px; flex-wrap: wrap;
+    padding-bottom: 40px; border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .lp-footer-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .lp-footer-brand-name { font-family: var(--font-display); font-size: 17px; font-weight: 700; color: #fff; }
+  .lp-footer-desc { font-size: 14px; line-height: 1.7; max-width: 420px; font-family: var(--font-ui); }
+  .lp-footer-cols { display: flex; gap: 64px; flex-wrap: wrap; }
+  .lp-footer-col h5 {
+    font-family: var(--font-ui);
+    font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    color: rgba(255,255,255,0.85); margin-bottom: 16px;
+  }
+  .lp-footer-col a {
+    display: block; font-size: 13.5px; color: rgba(255,255,255,0.6);
+    text-decoration: none; margin-bottom: 11px; transition: color var(--transition);
+  }
+  .lp-footer-col a:hover { color: #fff; }
+  .lp-footer-bottom {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    padding-top: 24px; font-size: 12.5px; color: rgba(255,255,255,0.45);
+  }
+
+  @media (max-width: 700px) {
+    .lp-section { padding: 76px 20px; }
+    .lp-section-head h2 { font-size: 28px; }
+    .lp-secure { padding: 48px 24px; }
+    .lp-secure h2 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- ============ NAV ============ -->
+  <nav class="lp-nav" id="lpNav">
+    <a href="welcome.html" class="lp-brand">
+      <div class="lp-brand-mark"><i data-lucide="flame" class="icon"></i></div>
+      <div>
+        <div class="lp-brand-name">FireSYS</div>
+        <div class="lp-brand-tag">Command Platform</div>
+      </div>
+    </a>
+    <div class="lp-nav-links">
+      <a href="#about">About</a>
+      <a href="#roles">Platform</a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="#secure-access">Secure Access</a>
+    </div>
+    <div class="lp-nav-actions">
+      <button class="theme-toggle" data-theme-toggle aria-label="Toggle dark mode">
+        <i data-lucide="sun" class="icon icon-sun"></i>
+        <i data-lucide="moon" class="icon icon-moon"></i>
+      </button>
+      <a href="login.html" class="btn btn-secondary">Sign In</a>
+    </div>
+  </nav>
+
+  <!-- ============ HERO ============ -->
+  <header class="lp-hero">
+    <div class="lp-hero-bg"></div>
+    <div class="lp-hero-inner">
+      <span class="lp-eyebrow"><i data-lucide="shield-check" class="icon"></i> Unified Command Platform</span>
+      <h1>FireSYS</h1>
+      <h2>Emergency Response Management Platform</h2>
+      <p>Coordinating emergency response, resource management, and operational control through a unified command platform designed for modern fire departments.</p>
+      <div class="lp-hero-cta">
+        <a href="login.html" class="btn btn-lg btn-hero-primary">Access Secure Portal <i data-lucide="arrow-right" class="icon"></i></a>
+        <a href="#about" class="btn btn-lg btn-hero-ghost">Explore the Platform</a>
+      </div>
+
+      <div class="lp-hero-stats">
+        <div class="lp-hero-stat">
+          <div class="lp-hero-stat-value">24/7</div>
+          <div class="lp-hero-stat-label">Operational Coverage</div>
+        </div>
+        <div class="lp-hero-stat">
+          <div class="lp-hero-stat-value">99.9%</div>
+          <div class="lp-hero-stat-label">Platform Uptime</div>
+        </div>
+        <div class="lp-hero-stat">
+          <div class="lp-hero-stat-value">&lt;2min</div>
+          <div class="lp-hero-stat-label">Avg. Dispatch Time</div>
+        </div>
+        <div class="lp-hero-stat">
+          <div class="lp-hero-stat-value">3</div>
+          <div class="lp-hero-stat-label">Integrated Command Roles</div>
+        </div>
+      </div>
+    </div>
+    <div class="lp-scroll-cue"><i data-lucide="chevron-down" class="icon"></i> Scroll</div>
+  </header>
+
+  <!-- ============ ABOUT ============ -->
+  <section class="lp-section" id="about">
+    <div class="lp-container">
+      <div class="lp-about-grid">
+        <div class="lp-about-copy">
+          <span class="lp-kicker lp-kicker-left">About FireSYS</span>
+          <h2>A single command system for the entire response lifecycle</h2>
+          <p class="lp-about-text">
+            FireSYS is a centralized emergency response platform designed to support fire departments in managing incidents, coordinating emergency personnel, tracking operational resources, and maintaining situational awareness through an integrated command system. By connecting dispatch operations, field response teams, and administrative management within a single platform, FireSYS enables faster decision-making, improved resource utilization, and efficient emergency response workflows.
+          </p>
+          <div class="lp-about-marks">
+            <div class="lp-about-mark">
+              <div class="icon-wrap"><i data-lucide="siren" class="icon"></i></div>
+              <span>Incident Management</span>
+            </div>
+            <div class="lp-about-mark">
+              <div class="icon-wrap"><i data-lucide="radio" class="icon"></i></div>
+              <span>Dispatch Coordination</span>
+            </div>
+            <div class="lp-about-mark">
+              <div class="icon-wrap"><i data-lucide="users" class="icon"></i></div>
+              <span>Personnel Oversight</span>
+            </div>
+            <div class="lp-about-mark">
+              <div class="icon-wrap"><i data-lucide="truck" class="icon"></i></div>
+              <span>Fleet &amp; Resources</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lp-about-media">
+          <img class="lp-about-photo" src="https://images.unsplash.com/photo-1697952433648-d1ad0e6cda00?q=80&w=1400&auto=format&fit=crop" alt="Firefighters coordinating a response">
+          <div class="lp-about-float">
+            <div class="icon-wrap"><i data-lucide="activity" class="icon"></i></div>
+            <div>
+              <div class="lp-about-float-value">Live Status</div>
+              <div class="lp-about-float-label">Crews &amp; apparatus tracked in real time</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SYSTEM ROLES ============ -->
+  <section class="lp-section lp-section-alt" id="roles">
+    <div class="lp-container">
+      <div class="lp-section-head">
+        <span class="lp-kicker">Built For Every Role</span>
+        <h2>One platform, purpose-built workspaces</h2>
+        <p>Every member of the department works from a workspace tailored to their responsibilities — connected by the same real-time operational data.</p>
+      </div>
+
+      <div class="lp-role-grid">
+        <div class="card lp-role-card">
+          <div class="lp-role-icon"><i data-lucide="shield" class="icon"></i></div>
+          <h3>System Administration</h3>
+          <span class="lp-role-tag">Department-wide oversight &amp; control</span>
+          <ul class="lp-role-list">
+            <li><i data-lucide="check" class="icon"></i> Personnel Management</li>
+            <li><i data-lucide="check" class="icon"></i> Fire Stations</li>
+            <li><i data-lucide="check" class="icon"></i> Fleet Management</li>
+            <li><i data-lucide="check" class="icon"></i> Operational Analytics</li>
+            <li><i data-lucide="check" class="icon"></i> Maintenance Scheduling</li>
+          </ul>
+        </div>
+
+        <div class="card lp-role-card">
+          <div class="lp-role-icon"><i data-lucide="radio" class="icon"></i></div>
+          <h3>Emergency Dispatch</h3>
+          <span class="lp-role-tag">Real-time coordination &amp; response control</span>
+          <ul class="lp-role-list">
+            <li><i data-lucide="check" class="icon"></i> Incident Coordination</li>
+            <li><i data-lucide="check" class="icon"></i> Resource Assignment</li>
+            <li><i data-lucide="check" class="icon"></i> Emergency Prioritization</li>
+            <li><i data-lucide="check" class="icon"></i> Dispatch Operations</li>
+          </ul>
+        </div>
+
+        <div class="card lp-role-card">
+          <div class="lp-role-icon"><i data-lucide="flame" class="icon"></i></div>
+          <h3>Field Operations</h3>
+          <span class="lp-role-tag">On-scene response &amp; mission tracking</span>
+          <ul class="lp-role-list">
+            <li><i data-lucide="check" class="icon"></i> Assigned Incidents</li>
+            <li><i data-lucide="check" class="icon"></i> Mission Status</li>
+            <li><i data-lucide="check" class="icon"></i> Response Tracking</li>
+            <li><i data-lucide="check" class="icon"></i> Operational History</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PHOTO BANNER ============ -->
+  <section class="lp-banner">
+    <div class="lp-banner-bg"></div>
+    <div class="lp-banner-inner">
+      <h2>Command your response, from the first call to the last unit clear</h2>
+      <p>FireSYS keeps dispatchers, crews, and administrators aligned on the same operational picture — so every incident is handled with clarity and speed.</p>
+      <div class="lp-banner-row">
+        <div><div class="lp-banner-stat-value">Real-time</div><div class="lp-banner-stat-label">Incident Visibility</div></div>
+        <div><div class="lp-banner-stat-value">Role-based</div><div class="lp-banner-stat-label">Secure Access</div></div>
+        <div><div class="lp-banner-stat-value">End-to-end</div><div class="lp-banner-stat-label">Fleet &amp; Crew Tracking</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ OPERATIONAL CAPABILITIES ============ -->
+  <section class="lp-section" id="capabilities">
+    <div class="lp-container">
+      <div class="lp-section-head">
+        <span class="lp-kicker">Operational Capabilities</span>
+        <h2>Everything a modern department needs to operate</h2>
+        <p>A complete operational toolkit — from the moment an incident is reported to the moment resources return to service.</p>
+      </div>
+
+      <div class="lp-cap-grid">
+        <div class="card lp-cap-card">
+          <div class="lp-cap-icon"><i data-lucide="siren" class="icon"></i></div>
+          <h4>Incident Command</h4>
+          <p>Centralized visibility and control over active incidents from report to resolution.</p>
+        </div>
+        <div class="card lp-cap-card">
+          <div class="lp-cap-icon"><i data-lucide="layers" class="icon"></i></div>
+          <h4>Resource Coordination</h4>
+          <p>Allocate crews, apparatus, and equipment precisely where they're needed most.</p>
+        </div>
+        <div class="card lp-cap-card">
+          <div class="lp-cap-icon"><i data-lucide="users" class="icon"></i></div>
+          <h4>Personnel Management</h4>
+          <p>Maintain a complete, up-to-date roster of firefighters, ranks, and station assignments.</p>
+        </div>
+        <div class="card lp-cap-card">
+          <div class="lp-cap-icon"><i data-lucide="truck" class="icon"></i></div>
+          <h4>Fleet Management</h4>
+          <p>Track apparatus availability, readiness status, and station-level deployment.</p>
+        </div>
+        <div class="card lp-cap-card">
+          <div class="lp-cap-icon"><i data-lucide="wrench" class="icon"></i></div>
+          <h4>Maintenance Tracking</h4>
+          <p>Schedule and monitor equipment and vehicle maintenance to ensure operational readiness.</p>
+        </div>
+        <div class="card lp-cap-card">
+          <div class="lp-cap-icon"><i data-lucide="bar-chart-3" class="icon"></i></div>
+          <h4>Operational Analytics</h4>
+          <p>Surface response-time trends, resource utilization, and department-wide performance.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SECURE ACCESS ============ -->
+  <section class="lp-section lp-section-alt" id="secure-access">
+    <div class="lp-container-narrow">
+      <div class="lp-secure">
+        <div class="lp-secure-icon"><i data-lucide="lock" class="icon"></i></div>
+        <h2>Secure Access</h2>
+        <p>Access to FireSYS is restricted to authorized department personnel. Sign in with your credentials to reach your command console.</p>
+        <a href="login.html" class="btn btn-lg btn-hero-primary">Access Secure Portal <i data-lucide="arrow-right" class="icon"></i></a>
+        <div class="lp-secure-badges">
+          <span class="lp-secure-badge"><i data-lucide="shield-check" class="icon"></i> Role-based access control</span>
+          <span class="lp-secure-badge"><i data-lucide="lock" class="icon"></i> Encrypted authentication</span>
+          <span class="lp-secure-badge"><i data-lucide="activity" class="icon"></i> Audited session activity</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="lp-footer">
+    <div class="lp-footer-inner">
+      <div class="lp-footer-top">
+        <div>
+          <div class="lp-footer-brand">
+            <div class="lp-brand-mark"><i data-lucide="flame" class="icon"></i></div>
+            <div class="lp-footer-brand-name">FireSYS — Emergency Response Management Platform</div>
+          </div>
+          <p class="lp-footer-desc">Empowering fire departments with centralized command, operational visibility, and intelligent resource coordination for effective emergency response.</p>
+        </div>
+        <div class="lp-footer-cols">
+          <div class="lp-footer-col">
+            <h5>Platform</h5>
+            <a href="#about">About FireSYS</a>
+            <a href="#roles">System Roles</a>
+            <a href="#capabilities">Capabilities</a>
+          </div>
+          <div class="lp-footer-col">
+            <h5>Access</h5>
+            <a href="login.html">Secure Sign In</a>
+            <a href="register.html">Request Access</a>
+          </div>
+        </div>
+      </div>
+      <div class="lp-footer-bottom">
+        <span>&copy; <span id="lpYear"></span> FireSYS. All rights reserved.</span>
+        <span>Emergency Response Management Platform</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/auth.js"></script>
+  <script>
+    document.getElementById('lpYear').textContent = new Date().getFullYear();
+    const lpNav = document.getElementById('lpNav');
+    window.addEventListener('scroll', () => {
+      lpNav.classList.toggle('scrolled', window.scrollY > 30);
+    });
+  </script>
+</body>
+</html>

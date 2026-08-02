@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manage Trucks — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+</head>
+<body>
+  <script src="js/auth.js"></script>
+  <script src="js/app-shell.js"></script>
+  <script>
+    const session = requireAuth('Admin');
+    let allTrucks = [];
+    let stations = [];
+    let currentPage = 1;
+    const PAGE_SIZE = 8;
+    let activeFilter = 'All';
+    let searchTerm = '';
+    let pendingDeleteId = null;
+
+    const STATUSES = ['Available', 'Busy', 'Maintenance'];
+    const STATUS_BADGE = { Available: 'badge-success', Busy: 'badge-danger', Maintenance: 'badge-warning' };
+
+    if (session) {
+      renderShell({
+        session,
+        activeHref: 'admin-trucks.html',
+        pageTitle: 'Manage Trucks',
+        pageSubtitle: 'Fleet inventory, assignment, and readiness status.',
+      });
+
+      document.getElementById('pageHeaderActions').innerHTML = `
+        <button class="btn btn-primary" id="addTruckBtn"><i data-lucide="truck" class="icon"></i> Add truck</button>
+      `;
+
+      document.getElementById('pageBody').innerHTML = `
+        <div class="card panel">
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <div class="search-bar" style="width:240px;">
+                <i data-lucide="search" class="icon" style="width:15px;height:15px;"></i>
+                <input type="text" id="searchInput" placeholder="Search truck code or type…">
+              </div>
+              <select class="filter-select" id="statusFilter">
+                <option value="All">All statuses</option>
+                ${STATUSES.map((s) => `<option value="${s}">${s}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Truck</th><th>Type</th><th>Station</th><th>Status</th><th></th></tr></thead>
+              <tbody id="trucksTbody">${skeletonRows(5, 5)}</tbody>
+            </table>
+          </div>
+          <div class="table-pagination">
+            <span id="paginationInfo"></span>
+            <div class="pagination-btns" id="paginationBtns"></div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('addTruckBtn').addEventListener('click', () => openTruckModal());
+      document.getElementById('searchInput').addEventListener('input', (e) => { searchTerm = e.target.value.toLowerCase(); currentPage = 1; renderTable(); });
+      document.getElementById('statusFilter').addEventListener('change', (e) => { activeFilter = e.target.value; currentPage = 1; renderTable(); });
+
+      if (window.lucide) window.lucide.createIcons();
+      loadTrucks();
+    }
+
+    async function loadTrucks() {
+      try {
+        const [trucks, stationList] = await Promise.all([apiAuth('/trucks'), apiAuth('/stations')]);
+        allTrucks = trucks;
+        stations = stationList;
+        renderTable();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function filtered() {
+      return allTrucks.filter((t) => {
+        const matchesStatus = activeFilter === 'All' || t.status === activeFilter;
+        const matchesSearch = !searchTerm || t.code.toLowerCase().includes(searchTerm) || (t.type || '').toLowerCase().includes(searchTerm);
+        return matchesStatus && matchesSearch;
+      });
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('trucksTbody');
+      const rows = filtered();
+      const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+      currentPage = Math.min(currentPage, totalPages);
+      const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+      if (!pageRows.length) {
+        tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon-wrap"><i data-lucide="truck" class="icon"></i></div><h4>No trucks found</h4><p>Try a different search or filter.</p></div></td></tr>`;
+      } else {
+        tbody.innerHTML = pageRows.map((t) => `
+          <tr>
+            <td style="font-weight:600;">${t.code}</td>
+            <td>${t.type || '—'}</td>
+            <td>${t.station_name || '—'}</td>
+            <td><span class="badge ${STATUS_BADGE[t.status] || 'badge-neutral'}">${t.status}</span></td>
+            <td>
+              <div class="row-actions">
+                <button class="btn-icon" title="Edit" onclick="openTruckModal(${t.id})"><i data-lucide="pencil" class="icon" style="width:15px;height:15px;"></i></button>
+                <button class="btn-icon" title="Delete" onclick="confirmDelete(${t.id})"><i data-lucide="trash-2" class="icon" style="width:15px;height:15px;"></i></button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      document.getElementById('paginationInfo').textContent = rows.length
+        ? `Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, rows.length)} of ${rows.length}`
+        : 'No results';
+
+      const btns = document.getElementById('paginationBtns');
+      let html = `<button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})"><i data-lucide="chevron-left" class="icon" style="width:14px;height:14px;"></i></button>`;
+      for (let i = 1; i <= totalPages; i++) html += `<button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+      html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})"><i data-lucide="chevron-right" class="icon" style="width:14px;height:14px;"></i></button>`;
+      btns.innerHTML = html;
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function goToPage(p) { currentPage = p; renderTable(); }
+
+    function openTruckModal(id) {
+      const existing = id ? allTrucks.find((t) => t.id === id) : null;
+      const stationOptions = stations.map((s) => `<option value="${s.id}" ${existing?.station_id === s.id ? 'selected' : ''}>${s.name}</option>`).join('');
+      const statusOptions = STATUSES.map((s) => `<option value="${s}" ${existing?.status === s ? 'selected' : ''}>${s}</option>`).join('');
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="modal card">
+          <div class="modal-header">
+            <h3>${existing ? 'Edit truck' : 'Add truck'}</h3>
+            <button class="modal-close" id="closeModal"><i data-lucide="x" class="icon"></i></button>
+          </div>
+          <div id="modalBanner" class="banner banner-danger hidden"><i data-lucide="alert-circle" class="icon"></i><span></span></div>
+          <form id="truckForm" novalidate>
+            <div class="field"><input type="text" id="mCode" placeholder=" " value="${existing?.code || ''}" ${existing ? 'disabled' : ''} required><label>Truck code (e.g. TRK-005)</label></div>
+            <div class="field"><input type="text" id="mType" placeholder=" " value="${existing?.type || ''}"><label>Type (e.g. Ladder, Engine, Rescue)</label></div>
+            <div class="field">
+              <select id="mStation" style="width:100%; height:52px; padding:0 16px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg-surface); color:var(--text-primary);">
+                <option value="">No station</option>
+                ${stationOptions}
+              </select>
+            </div>
+            ${existing ? `
+            <div class="field">
+              <select id="mStatus" style="width:100%; height:52px; padding:0 16px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg-surface); color:var(--text-primary);">
+                ${statusOptions}
+              </select>
+            </div>` : ''}
+          </form>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancelModal">Cancel</button>
+            <button class="btn btn-primary" id="saveModal">${existing ? 'Save changes' : 'Add truck'}</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('open'));
+      if (window.lucide) window.lucide.createIcons();
+
+      const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); };
+      overlay.querySelector('#closeModal').addEventListener('click', close);
+      overlay.querySelector('#cancelModal').addEventListener('click', close);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+      overlay.querySelector('#saveModal').addEventListener('click', async () => {
+        const btn = overlay.querySelector('#saveModal');
+        const banner = overlay.querySelector('#modalBanner');
+        const type = overlay.querySelector('#mType').value.trim() || null;
+        const stationId = overlay.querySelector('#mStation').value || null;
+        try {
+          if (existing) {
+            setButtonLoading(btn, true, 'Saving…');
+            await apiAuth(`/trucks/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ type, stationId, status: overlay.querySelector('#mStatus').value }) });
+            showToast('Truck updated.', 'success');
+          } else {
+            const code = overlay.querySelector('#mCode').value.trim();
+            if (!code) { banner.classList.remove('hidden'); banner.querySelector('span').textContent = 'Truck code is required.'; return; }
+            setButtonLoading(btn, true, 'Adding…');
+            await apiAuth('/trucks', { method: 'POST', body: JSON.stringify({ code, type, stationId }) });
+            showToast('Truck added.', 'success');
+          }
+          close();
+          loadTrucks();
+        } catch (err) {
+          banner.classList.remove('hidden');
+          banner.querySelector('span').textContent = err.message;
+          setButtonLoading(btn, false);
+        }
+      });
+    }
+
+    function confirmDelete(id) {
+      pendingDeleteId = id;
+      const truck = allTrucks.find((t) => t.id === id);
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="modal card" style="max-width:380px;">
+          <div class="modal-header"><h3>Remove truck?</h3><button class="modal-close" id="closeConfirm"><i data-lucide="x" class="icon"></i></button></div>
+          <p style="font-size:13.5px; color:var(--text-secondary);">${truck.code} will be removed from the fleet. This can't be undone.</p>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancelConfirm">Cancel</button>
+            <button class="btn btn-primary" style="background:var(--color-danger);" id="confirmBtn">Remove</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('open'));
+      if (window.lucide) window.lucide.createIcons();
+
+      const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); };
+      overlay.querySelector('#closeConfirm').addEventListener('click', close);
+      overlay.querySelector('#cancelConfirm').addEventListener('click', close);
+      overlay.querySelector('#confirmBtn').addEventListener('click', async () => {
+        try {
+          await apiAuth(`/trucks/${id}`, { method: 'DELETE' });
+          showToast('Truck removed.', 'success');
+          close();
+          loadTrucks();
+        } catch (err) {
+          showToast(err.message, 'danger');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

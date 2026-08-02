@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispatcher Overview — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <script src="js/auth.js"></script>
+  <script src="js/app-shell.js"></script>
+  <script>
+    const session = requireAuth('Dispatcher');
+
+    if (session) {
+      renderShell({
+        session,
+        activeHref: 'dashboard-dispatcher.html',
+        pageTitle: 'Overview',
+        pageSubtitle: `Welcome back, ${session.user.name.split(' ')[0]}. Here's the live picture.`,
+      });
+
+      document.getElementById('pageBody').innerHTML = `
+        <div class="kpi-grid" id="kpiGrid"></div>
+
+        <div class="content-grid">
+          <div class="card panel">
+            <div class="panel-header"><h3>Incidents — last 6 months</h3></div>
+            <canvas id="incidentChart" height="120"></canvas>
+          </div>
+          <div class="card panel">
+            <div class="panel-header"><h3>Quick actions</h3></div>
+            <div class="quick-actions">
+              <a href="dispatcher-incidents.html" class="quick-action-btn">
+                <div class="icon-wrap"><i data-lucide="siren" class="icon"></i></div>
+                Create incident
+              </a>
+              <a href="dispatcher-trucks.html" class="quick-action-btn">
+                <div class="icon-wrap"><i data-lucide="truck" class="icon"></i></div>
+                View trucks
+              </a>
+              <a href="dispatcher-firefighters.html" class="quick-action-btn">
+                <div class="icon-wrap"><i data-lucide="flame" class="icon"></i></div>
+                View crew
+              </a>
+              <a href="dispatcher-incidents.html" class="quick-action-btn">
+                <div class="icon-wrap"><i data-lucide="check-circle-2" class="icon"></i></div>
+                Resolve incident
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card panel">
+          <div class="panel-header"><h3>Active incidents</h3></div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Location</th><th>Type</th><th>Severity</th><th>Status</th></tr></thead>
+              <tbody id="activeTbody">${skeletonRows(4, 4)}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      if (window.lucide) window.lucide.createIcons();
+      loadDashboard();
+    }
+
+    const STATUS_BADGE = { Active: 'badge-danger', 'In Progress': 'badge-warning', Resolved: 'badge-success' };
+    const SEVERITY_BADGE = { Critical: 'badge-danger', High: 'badge-warning', Medium: 'badge-info', Low: 'badge-neutral' };
+
+    async function loadDashboard() {
+      try {
+        const [summary, monthly, incidents] = await Promise.all([
+          apiAuth('/analytics/summary'),
+          apiAuth('/analytics/monthly-incidents'),
+          apiAuth('/incidents'),
+        ]);
+        renderKpis(summary);
+        renderChart(monthly);
+        renderActive(incidents);
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function renderKpis(summary) {
+      const cards = [
+        { label: 'Active incidents', value: summary.incidents.active, icon: 'siren', bg: 'var(--color-danger-bg)', fg: 'var(--color-primary)' },
+        { label: 'Total incidents', value: summary.incidents.total, icon: 'activity', bg: 'var(--color-info-bg)', fg: 'var(--color-info)' },
+        { label: 'Firefighters available', value: `${summary.firefighters.available}/${summary.firefighters.total}`, icon: 'flame', bg: 'var(--color-accent-light)', fg: 'var(--color-accent)' },
+        { label: 'Trucks available', value: `${summary.trucks.available}/${summary.trucks.total}`, icon: 'truck', bg: 'var(--color-success-bg)', fg: 'var(--color-success)' },
+      ];
+      document.getElementById('kpiGrid').innerHTML = cards.map((c) => `
+        <div class="card kpi-card">
+          <div class="kpi-card-top"><div class="kpi-icon" style="background:${c.bg}; color:${c.fg};"><i data-lucide="${c.icon}" class="icon"></i></div></div>
+          <div class="kpi-value">${c.value}</div>
+          <div class="kpi-label">${c.label}</div>
+        </div>
+      `).join('');
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function renderChart(monthly) {
+      const labels = monthly.map((m) => {
+        const [y, mo] = m.month.split('-');
+        return new Date(Number(y), Number(mo) - 1).toLocaleString('default', { month: 'short' });
+      });
+      const data = monthly.map((m) => m.count);
+      const isDark = document.body.classList.contains('dark');
+      new Chart(document.getElementById('incidentChart'), {
+        type: 'bar',
+        data: { labels: labels.length ? labels : ['No data yet'], datasets: [{ data: data.length ? data : [0], backgroundColor: '#b3261e', borderRadius: 6, maxBarThickness: 36 }] },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: isDark ? '#aab3c5' : '#565d6d' } },
+            y: { beginAtZero: true, ticks: { precision: 0, color: isDark ? '#aab3c5' : '#565d6d' }, grid: { color: isDark ? '#223151' : '#e6e8ee' } },
+          },
+        },
+      });
+    }
+
+    function renderActive(incidents) {
+      const active = incidents.filter((i) => i.status !== 'Resolved').slice(0, 8);
+      const tbody = document.getElementById('activeTbody');
+      if (!active.length) {
+        tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><div class="icon-wrap"><i data-lucide="check-circle-2" class="icon"></i></div><h4>All clear</h4><p>No active incidents right now.</p></div></td></tr>`;
+      } else {
+        tbody.innerHTML = active.map((i) => `
+          <tr>
+            <td style="font-weight:600;">${i.location}</td>
+            <td>${i.type}</td>
+            <td><span class="badge ${SEVERITY_BADGE[i.severity] || 'badge-neutral'}">${i.severity}</span></td>
+            <td><span class="badge ${STATUS_BADGE[i.status] || 'badge-neutral'}">${i.status}</span></td>
+          </tr>
+        `).join('');
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manage Users — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+</head>
+<body>
+  <script src="js/auth.js"></script>
+  <script src="js/app-shell.js"></script>
+  <script>
+    const session = requireAuth('Admin');
+    let allUsers = [];
+    let stations = [];
+    let currentPage = 1;
+    const PAGE_SIZE = 8;
+    let activeFilter = 'All';
+    let searchTerm = '';
+    let pendingDeactivateId = null;
+
+    if (session) {
+      renderShell({
+        session,
+        activeHref: 'admin-users.html',
+        pageTitle: 'Manage Users',
+        pageSubtitle: 'Admin, Dispatcher, and Firefighter accounts across all stations.',
+      });
+
+      document.getElementById('pageHeaderActions').innerHTML = `
+        <button class="btn btn-primary" id="addUserBtn"><i data-lucide="user-plus" class="icon"></i> Add user</button>
+      `;
+
+      document.getElementById('pageBody').innerHTML = `
+        <div class="card panel">
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <div class="search-bar" style="width:240px;">
+                <i data-lucide="search" class="icon" style="width:15px;height:15px;"></i>
+                <input type="text" id="searchInput" placeholder="Search name or email…">
+              </div>
+              <select class="filter-select" id="roleFilter">
+                <option value="All">All roles</option>
+                <option value="Admin">Admin</option>
+                <option value="Dispatcher">Dispatcher</option>
+                <option value="Firefighter">Firefighter</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th><th>Role</th><th>Station</th><th>Status</th><th>Joined</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="usersTbody">${skeletonRows(6, 5)}</tbody>
+            </table>
+          </div>
+          <div class="table-pagination">
+            <span id="paginationInfo"></span>
+            <div class="pagination-btns" id="paginationBtns"></div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('addUserBtn').addEventListener('click', () => openUserModal());
+      document.getElementById('searchInput').addEventListener('input', (e) => { searchTerm = e.target.value.toLowerCase(); currentPage = 1; renderTable(); });
+      document.getElementById('roleFilter').addEventListener('change', (e) => { activeFilter = e.target.value; currentPage = 1; renderTable(); });
+
+      if (window.lucide) window.lucide.createIcons();
+      loadUsers();
+    }
+
+    async function loadUsers() {
+      try {
+        const [users, stationList] = await Promise.all([apiAuth('/users'), apiAuth('/stations')]);
+        allUsers = users;
+        stations = stationList;
+        renderTable();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function filteredUsers() {
+      return allUsers.filter((u) => {
+        const matchesRole = activeFilter === 'All' || u.role === activeFilter;
+        const matchesSearch = !searchTerm || u.name.toLowerCase().includes(searchTerm) || u.email.toLowerCase().includes(searchTerm);
+        return matchesRole && matchesSearch;
+      });
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('usersTbody');
+      const filtered = filteredUsers();
+      const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+      currentPage = Math.min(currentPage, totalPages);
+      const pageRows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+      if (!pageRows.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon-wrap"><i data-lucide="users" class="icon"></i></div><h4>No users found</h4><p>Try a different search or filter.</p></div></td></tr>`;
+      } else {
+        tbody.innerHTML = pageRows.map((u) => `
+          <tr>
+            <td>
+              <div class="cell-user">
+                <div class="cell-avatar">${initials(u.name)}</div>
+                <div>
+                  <div style="font-weight:600;">${u.name}</div>
+                  <div style="font-size:12px; color:var(--text-muted);">${u.email}</div>
+                </div>
+              </div>
+            </td>
+            <td><span class="badge badge-info">${u.role}</span></td>
+            <td>${u.station_name || '—'}</td>
+            <td>${u.is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-neutral">Inactive</span>'}</td>
+            <td>${new Date(u.created_at).toLocaleDateString()}</td>
+            <td>
+              <div class="row-actions">
+                <button class="btn-icon" title="Edit" onclick="openUserModal(${u.id})"><i data-lucide="pencil" class="icon" style="width:15px;height:15px;"></i></button>
+                ${u.is_active ? `<button class="btn-icon" title="Deactivate" onclick="confirmDeactivate(${u.id})"><i data-lucide="user-x" class="icon" style="width:15px;height:15px;"></i></button>` : ''}
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      document.getElementById('paginationInfo').textContent = filtered.length
+        ? `Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, filtered.length)} of ${filtered.length}`
+        : 'No results';
+
+      const btns = document.getElementById('paginationBtns');
+      let btnHtml = `<button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})"><i data-lucide="chevron-left" class="icon" style="width:14px;height:14px;"></i></button>`;
+      for (let i = 1; i <= totalPages; i++) {
+        btnHtml += `<button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+      }
+      btnHtml += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})"><i data-lucide="chevron-right" class="icon" style="width:14px;height:14px;"></i></button>`;
+      btns.innerHTML = btnHtml;
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function goToPage(p) { currentPage = p; renderTable(); }
+
+    /* ---------- Add/Edit modal ---------- */
+    function openUserModal(userId) {
+      const existing = userId ? allUsers.find((u) => u.id === userId) : null;
+      const stationOptions = stations.map((s) => `<option value="${s.id}" ${existing?.station_id === s.id ? 'selected' : ''}>${s.name}</option>`).join('');
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="modal card">
+          <div class="modal-header">
+            <h3>${existing ? 'Edit user' : 'Add user'}</h3>
+            <button class="modal-close" id="closeModal"><i data-lucide="x" class="icon"></i></button>
+          </div>
+          <div id="modalBanner" class="banner banner-danger hidden"><i data-lucide="alert-circle" class="icon"></i><span></span></div>
+          <form id="userForm" novalidate>
+            <div class="field"><input type="text" id="mName" placeholder=" " value="${existing?.name || ''}" required><label>Full name</label></div>
+            <div class="field"><input type="email" id="mEmail" placeholder=" " value="${existing?.email || ''}" ${existing ? 'disabled' : ''} required><label>Email address</label></div>
+            ${existing ? '' : `
+            <div class="field"><input type="password" id="mPassword" placeholder=" " required><label>Temporary password</label></div>
+            <div class="field">
+              <select id="mRole" style="width:100%; height:52px; padding:0 16px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg-surface); color:var(--text-primary);">
+                <option value="Firefighter">Firefighter</option>
+                <option value="Dispatcher">Dispatcher</option>
+                <option value="Admin">Admin</option>
+              </select>
+            </div>`}
+            <div class="field">
+              <select id="mStation" style="width:100%; height:52px; padding:0 16px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg-surface); color:var(--text-primary);">
+                <option value="">No station</option>
+                ${stationOptions}
+              </select>
+            </div>
+          </form>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancelModal">Cancel</button>
+            <button class="btn btn-primary" id="saveModal">${existing ? 'Save changes' : 'Create user'}</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('open'));
+      if (window.lucide) window.lucide.createIcons();
+
+      const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); };
+      overlay.querySelector('#closeModal').addEventListener('click', close);
+      overlay.querySelector('#cancelModal').addEventListener('click', close);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+      overlay.querySelector('#saveModal').addEventListener('click', async () => {
+        const name = overlay.querySelector('#mName').value.trim();
+        const stationId = overlay.querySelector('#mStation').value || null;
+        const banner = overlay.querySelector('#modalBanner');
+        banner.classList.add('hidden');
+        const btn = overlay.querySelector('#saveModal');
+
+        try {
+          if (existing) {
+            setButtonLoading(btn, true, 'Saving…');
+            await apiAuth(`/users/${existing.id}`, { method: 'PATCH', body: JSON.stringify({ name, stationId }) });
+            showToast('User updated.', 'success');
+          } else {
+            const email = overlay.querySelector('#mEmail').value.trim();
+            const password = overlay.querySelector('#mPassword').value;
+            const role = overlay.querySelector('#mRole').value;
+            if (!name || !email || !password) { banner.classList.remove('hidden'); banner.querySelector('span').textContent = 'All fields are required.'; return; }
+            setButtonLoading(btn, true, 'Creating…');
+            await apiAuth('/users', { method: 'POST', body: JSON.stringify({ name, email, password, role, stationId }) });
+            showToast('User created.', 'success');
+          }
+          close();
+          loadUsers();
+        } catch (err) {
+          banner.classList.remove('hidden');
+          banner.querySelector('span').textContent = err.message;
+          setButtonLoading(btn, false);
+        }
+      });
+    }
+
+    /* ---------- Deactivate confirmation ---------- */
+    function confirmDeactivate(id) {
+      pendingDeactivateId = id;
+      const user = allUsers.find((u) => u.id === id);
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="modal card" style="max-width:380px;">
+          <div class="modal-header"><h3>Deactivate account?</h3><button class="modal-close" id="closeConfirm"><i data-lucide="x" class="icon"></i></button></div>
+          <p style="font-size:13.5px; color:var(--text-secondary);">${user.name} will lose access to FireSYS immediately. You can't undo this from here.</p>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancelConfirm">Cancel</button>
+            <button class="btn btn-primary" style="background:var(--color-danger);" id="confirmBtn">Deactivate</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('open'));
+      if (window.lucide) window.lucide.createIcons();
+
+      const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); };
+      overlay.querySelector('#closeConfirm').addEventListener('click', close);
+      overlay.querySelector('#cancelConfirm').addEventListener('click', close);
+      overlay.querySelector('#confirmBtn').addEventListener('click', async () => {
+        try {
+          await apiAuth(`/users/${id}`, { method: 'DELETE' });
+          showToast('User deactivated.', 'success');
+          close();
+          loadUsers();
+        } catch (err) {
+          showToast(err.message, 'danger');
+        }
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Incident Reports — FireSYS</title>
+<link rel="stylesheet" href="css/design-system.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+</head>
+<body>
+  <script src="js/auth.js"></script>
+  <script src="js/app-shell.js"></script>
+  <script>
+    const session = requireAuth('Admin');
+    let allIncidents = [];
+    let currentPage = 1;
+    const PAGE_SIZE = 8;
+    let statusFilter = 'All';
+    let severityFilter = 'All';
+    let searchTerm = '';
+
+    const STATUS_BADGE = { Active: 'badge-danger', 'In Progress': 'badge-warning', Resolved: 'badge-success' };
+    const SEVERITY_BADGE = { Critical: 'badge-danger', High: 'badge-warning', Medium: 'badge-info', Low: 'badge-neutral' };
+
+    if (session) {
+      renderShell({
+        session,
+        activeHref: 'admin-incidents.html',
+        pageTitle: 'Incident Reports',
+        pageSubtitle: 'Full history of reported incidents across all stations.',
+      });
+
+      document.getElementById('pageBody').innerHTML = `
+        <div class="card panel">
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <div class="search-bar" style="width:240px;">
+                <i data-lucide="search" class="icon" style="width:15px;height:15px;"></i>
+                <input type="text" id="searchInput" placeholder="Search location or type…">
+              </div>
+              <select class="filter-select" id="statusFilterEl">
+                <option value="All">All statuses</option>
+                <option>Active</option><option>In Progress</option><option>Resolved</option>
+              </select>
+              <select class="filter-select" id="severityFilterEl">
+                <option value="All">All severities</option>
+                <option>Critical</option><option>High</option><option>Medium</option><option>Low</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Location</th><th>Type</th><th>Severity</th><th>Status</th><th>Reported</th><th></th></tr></thead>
+              <tbody id="incidentsTbody">${skeletonRows(6, 5)}</tbody>
+            </table>
+          </div>
+          <div class="table-pagination">
+            <span id="paginationInfo"></span>
+            <div class="pagination-btns" id="paginationBtns"></div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('searchInput').addEventListener('input', (e) => { searchTerm = e.target.value.toLowerCase(); currentPage = 1; renderTable(); });
+      document.getElementById('statusFilterEl').addEventListener('change', (e) => { statusFilter = e.target.value; currentPage = 1; renderTable(); });
+      document.getElementById('severityFilterEl').addEventListener('change', (e) => { severityFilter = e.target.value; currentPage = 1; renderTable(); });
+
+      if (window.lucide) window.lucide.createIcons();
+      loadIncidents();
+    }
+
+    async function loadIncidents() {
+      try {
+        allIncidents = await apiAuth('/incidents');
+        renderTable();
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    }
+
+    function filtered() {
+      return allIncidents.filter((i) => {
+        const matchesStatus = statusFilter === 'All' || i.status === statusFilter;
+        const matchesSeverity = severityFilter === 'All' || i.severity === severityFilter;
+        const matchesSearch = !searchTerm || i.location.toLowerCase().includes(searchTerm) || i.type.toLowerCase().includes(searchTerm);
+        return matchesStatus && matchesSeverity && matchesSearch;
+      });
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('incidentsTbody');
+      const rows = filtered();
+      const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+      currentPage = Math.min(currentPage, totalPages);
+      const pageRows = rows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+      if (!pageRows.length) {
+        tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="icon-wrap"><i data-lucide="siren" class="icon"></i></div><h4>No incidents found</h4><p>Try a different search or filter.</p></div></td></tr>`;
+      } else {
+        tbody.innerHTML = pageRows.map((i) => `
+          <tr>
+            <td style="font-weight:600;">${i.location}</td>
+            <td>${i.type}</td>
+            <td><span class="badge ${SEVERITY_BADGE[i.severity] || 'badge-neutral'}">${i.severity}</span></td>
+            <td><span class="badge ${STATUS_BADGE[i.status] || 'badge-neutral'}">${i.status}</span></td>
+            <td>${i.created_at ? new Date(i.created_at).toLocaleDateString() : '—'}</td>
+            <td>
+              <div class="row-actions">
+                <button class="btn-icon" title="View details" onclick="viewIncident(${i.id})"><i data-lucide="eye" class="icon" style="width:15px;height:15px;"></i></button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      }
+
+      document.getElementById('paginationInfo').textContent = rows.length
+        ? `Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, rows.length)} of ${rows.length}`
+        : 'No results';
+
+      const btns = document.getElementById('paginationBtns');
+      let html = `<button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})"><i data-lucide="chevron-left" class="icon" style="width:14px;height:14px;"></i></button>`;
+      for (let p = 1; p <= totalPages; p++) html += `<button class="${p === currentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>`;
+      html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})"><i data-lucide="chevron-right" class="icon" style="width:14px;height:14px;"></i></button>`;
+      btns.innerHTML = html;
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function goToPage(p) { currentPage = p; renderTable(); }
+
+    function viewIncident(id) {
+      const inc = allIncidents.find((i) => i.id === id);
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="modal card">
+          <div class="modal-header"><h3>Incident #${inc.id}</h3><button class="modal-close" id="closeModal"><i data-lucide="x" class="icon"></i></button></div>
+          <div style="display:flex; flex-direction:column; gap:14px; font-size:13.5px;">
+            <div><div style="color:var(--text-muted); font-size:12px; margin-bottom:2px;">Location</div><div style="font-weight:600;">${inc.location}</div></div>
+            <div><div style="color:var(--text-muted); font-size:12px; margin-bottom:2px;">Type</div><div>${inc.type}</div></div>
+            <div style="display:flex; gap:24px;">
+              <div><div style="color:var(--text-muted); font-size:12px; margin-bottom:4px;">Severity</div><span class="badge ${SEVERITY_BADGE[inc.severity] || 'badge-neutral'}">${inc.severity}</span></div>
+              <div><div style="color:var(--text-muted); font-size:12px; margin-bottom:4px;">Status</div><span class="badge ${STATUS_BADGE[inc.status] || 'badge-neutral'}">${inc.status}</span></div>
+            </div>
+            ${inc.description ? `<div><div style="color:var(--text-muted); font-size:12px; margin-bottom:2px;">Description</div><div>${inc.description}</div></div>` : ''}
+            <div><div style="color:var(--text-muted); font-size:12px; margin-bottom:2px;">Reported</div><div>${inc.created_at ? new Date(inc.created_at).toLocaleString() : '—'}</div></div>
+            ${inc.resolved_at ? `<div><div style="color:var(--text-muted); font-size:12px; margin-bottom:2px;">Resolved</div><div>${new Date(inc.resolved_at).toLocaleString()}</div></div>` : ''}
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="closeBtn">Close</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('open'));
+      if (window.lucide) window.lucide.createIcons();
+      const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); };
+      overlay.querySelector('#closeModal').addEventListener('click', close);
+      overlay.querySelector('#closeBtn').addEventListener('click', close);
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    }
+  </script>
+</body>
+</html>
