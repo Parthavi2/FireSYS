@@ -3,10 +3,16 @@
 -- ============================================================
 -- This is the target schema for the Auth + RBAC + full-CRUD phase.
 -- It supersedes the minimal 4-table bootstrap used in Step 1.
--- The currently-running app (incidents/firefighters/trucks/dispatch,
--- no login) still points at the old bootstrap schema — this gets
--- wired in together with the Authentication step, since firefighters
--- and dispatchers are now user accounts.
+--
+-- NOTE ON dispatch: this table intentionally uses the simpler,
+-- pre-normalization design (status as VARCHAR, no dispatched_by,
+-- no completed_at, no firefighter crew-tracking table). The fully
+-- normalized version (`dispatches` + `dispatch_firefighters`) was
+-- designed but never wired into the app, so it was removed from
+-- this schema to keep the file matching what's actually running.
+-- If crew-tracking or stricter status validation is needed later,
+-- reintroduce `dispatch_firefighters` and convert `status` to an
+-- ENUM at that point.
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS fire_dispatch;
@@ -15,8 +21,7 @@ USE fire_dispatch;
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS activity_logs;
 DROP TABLE IF EXISTS maintenance;
-DROP TABLE IF EXISTS dispatch_firefighters;
-DROP TABLE IF EXISTS dispatches;
+DROP TABLE IF EXISTS dispatch;
 DROP TABLE IF EXISTS incidents;
 DROP TABLE IF EXISTS trucks;
 DROP TABLE IF EXISTS firefighters;
@@ -119,35 +124,20 @@ CREATE TABLE incidents (
 );
 
 -- ---------------------------------------------------------
--- dispatches — one truck assignment per row; which firefighters
--- rode on that assignment is tracked in dispatch_firefighters
+-- dispatch — one truck assignment per row. No crew-tracking
+-- table; which firefighters rode on a given dispatch is not
+-- currently modeled (see note at top of file).
 -- ---------------------------------------------------------
-CREATE TABLE dispatches (
-  id            INT AUTO_INCREMENT PRIMARY KEY,
-  incident_id   INT NOT NULL,
-  truck_id      INT NOT NULL,
-  dispatched_by INT,
-  status        ENUM('Assigned','En Route','On Scene','Completed') NOT NULL DEFAULT 'Assigned',
-  dispatched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  completed_at  TIMESTAMP NULL,
-  FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE,
+CREATE TABLE dispatch (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  incident_id INT NOT NULL,
+  truck_id INT NOT NULL,
+  status VARCHAR(50) NOT NULL DEFAULT 'Assigned',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (incident_id) REFERENCES incidents(id),
   FOREIGN KEY (truck_id) REFERENCES trucks(id),
-  FOREIGN KEY (dispatched_by) REFERENCES users(id) ON DELETE SET NULL,
-  INDEX idx_dispatches_incident (incident_id),
-  INDEX idx_dispatches_truck (truck_id)
-);
-
--- ---------------------------------------------------------
--- dispatch_firefighters — many-to-many: a dispatch can carry
--- several firefighters, a firefighter can appear on several
--- dispatches over time
--- ---------------------------------------------------------
-CREATE TABLE dispatch_firefighters (
-  dispatch_id    INT NOT NULL,
-  firefighter_id INT NOT NULL,
-  PRIMARY KEY (dispatch_id, firefighter_id),
-  FOREIGN KEY (dispatch_id) REFERENCES dispatches(id) ON DELETE CASCADE,
-  FOREIGN KEY (firefighter_id) REFERENCES firefighters(id) ON DELETE CASCADE
+  INDEX idx_dispatch_incident (incident_id),
+  INDEX idx_dispatch_truck (truck_id)
 );
 
 -- ---------------------------------------------------------
